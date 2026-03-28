@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useMemo } from 'react';
 import * as echarts from 'echarts';
 
-export default function HeatMap({ stocks }) {
+export default function HeatMap({ stocks, groupBy = 'industry' }) {
   const chartRef = useRef(null);
   const chartInstance = useRef(null);
 
@@ -9,49 +9,72 @@ export default function HeatMap({ stocks }) {
   const treeData = useMemo(() => {
     if (!stocks || stocks.length === 0) return [];
 
-    // 按涨跌幅分组
-    const upStocks = stocks.filter(s => s.change > 0);
-    const downStocks = stocks.filter(s => s.change < 0);
-    const flatStocks = stocks.filter(s => s.change === 0);
+    if (groupBy === 'industry') {
+      // 按行业分组
+      const industryMap = {};
+      
+      stocks.forEach(stock => {
+        const industry = stock.industry || '其他';
+        if (!industryMap[industry]) {
+          industryMap[industry] = [];
+        }
+        industryMap[industry].push(stock);
+      });
 
-    const createTreeNode = (stock) => ({
-      name: stock.name,
-      value: Math.abs(stock.change) + 0.1, // 最小值避免为0
-      itemStyle: {
-        color: getColor(stock.change),
-      },
-      // 保存原始数据用于 tooltip
-      data: stock,
-    });
+      return Object.entries(industryMap).map(([industry, stocks]) => ({
+        name: industry,
+        itemStyle: { color: '#2d3748' },
+        children: stocks.map(stock => ({
+          name: stock.name,
+          value: stock.marketCap || 100, // 用市值决定方块大小
+          itemStyle: {
+            color: getColor(stock.change),
+          },
+          data: stock,
+        })),
+      }));
+    } else {
+      // 按涨跌分组
+      const upStocks = stocks.filter(s => s.change > 0);
+      const downStocks = stocks.filter(s => s.change < 0);
+      const flatStocks = stocks.filter(s => s.change === 0);
 
-    return [
-      {
-        name: '上涨',
-        itemStyle: { color: '#ff4444' },
-        children: upStocks.map(createTreeNode),
-      },
-      {
-        name: '下跌',
-        itemStyle: { color: '#00aa00' },
-        children: downStocks.map(createTreeNode),
-      },
-      {
-        name: '平盘',
-        itemStyle: { color: '#888888' },
-        children: flatStocks.map(createTreeNode),
-      },
-    ].filter(group => group.children && group.children.length > 0);
-  }, [stocks]);
+      const createTreeNode = (stock) => ({
+        name: stock.name,
+        value: stock.marketCap || 100,
+        itemStyle: {
+          color: getColor(stock.change),
+        },
+        data: stock,
+      });
+
+      return [
+        {
+          name: '上涨',
+          itemStyle: { color: '#2d3748' },
+          children: upStocks.map(createTreeNode),
+        },
+        {
+          name: '下跌',
+          itemStyle: { color: '#2d3748' },
+          children: downStocks.map(createTreeNode),
+        },
+        {
+          name: '平盘',
+          itemStyle: { color: '#2d3748' },
+          children: flatStocks.map(createTreeNode),
+        },
+      ].filter(group => group.children && group.children.length > 0);
+    }
+  }, [stocks, groupBy]);
 
   useEffect(() => {
     if (!chartRef.current) return;
 
-    // 如果图表实例已存在，销毁它
     if (chartInstance.current) {
       chartInstance.current.dispose();
     }
 
-    // 初始化图表
     chartInstance.current = echarts.init(chartRef.current);
 
     const option = {
@@ -77,8 +100,7 @@ export default function HeatMap({ stocks }) {
                 <span>换手率:</span> <span>${stock.turnoverRate.toFixed(2)}%</span>
                 <span>最高:</span> <span>¥${stock.high.toFixed(2)}</span>
                 <span>最低:</span> <span>¥${stock.low.toFixed(2)}</span>
-                <span>昨收:</span> <span>¥${stock.prevClose.toFixed(2)}</span>
-                <span>今开:</span> <span>¥${stock.open.toFixed(2)}</span>
+                <span>行业:</span> <span>${stock.industry || '-'}</span>
               </div>
             </div>
           `;
@@ -97,10 +119,10 @@ export default function HeatMap({ stocks }) {
           data: treeData,
           width: '100%',
           height: '100%',
-          roam: false, // 禁用缩放拖拽，避免和页面滚动冲突
-          nodeClick: false, // 禁用点击下钻
+          roam: false,
+          nodeClick: false,
           breadcrumb: {
-            show: false, // 隐藏面包屑
+            show: false,
           },
           label: {
             show: true,
@@ -125,7 +147,15 @@ export default function HeatMap({ stocks }) {
             },
           },
           upperLabel: {
-            show: false,
+            show: true,
+            formatter: (params) => {
+              return params.name;
+            },
+            textStyle: {
+              fontSize: 14,
+              fontWeight: 'bold',
+              color: '#fff',
+            },
           },
           itemStyle: {
             borderColor: '#1a1a1a',
@@ -138,6 +168,9 @@ export default function HeatMap({ stocks }) {
                 borderColor: '#1a1a1a',
                 borderWidth: 2,
                 gapWidth: 2,
+              },
+              upperLabel: {
+                show: true,
               },
             },
             {
@@ -154,7 +187,6 @@ export default function HeatMap({ stocks }) {
 
     chartInstance.current.setOption(option);
 
-    // 响应式调整
     const handleResize = () => {
       chartInstance.current?.resize();
     };
@@ -173,13 +205,19 @@ export default function HeatMap({ stocks }) {
 // 颜色编码：红色涨，绿色跌
 function getColor(change) {
   if (change > 0) {
-    // 涨 - 红色系
-    const intensity = Math.min(1, change / 10); // 最大10%涨幅对应最深色
-    return `rgb(255, ${Math.floor(68 + (1 - intensity) * 100)}, ${Math.floor(68 + (1 - intensity) * 100)})`;
+    // 涨 - 红色系，越涨越红
+    const intensity = Math.min(1, change / 10);
+    const r = 255;
+    const g = Math.floor(68 + (1 - intensity) * 100);
+    const b = Math.floor(68 + (1 - intensity) * 100);
+    return `rgb(${r}, ${g}, ${b})`;
   } else if (change < 0) {
-    // 跌 - 绿色系
+    // 跌 - 绿色系，越跌越绿
     const intensity = Math.min(1, Math.abs(change) / 10);
-    return `rgb(${Math.floor(68 + (1 - intensity) * 100)}, 255, ${Math.floor(68 + (1 - intensity) * 100)})`;
+    const r = Math.floor(68 + (1 - intensity) * 100);
+    const g = 255;
+    const b = Math.floor(68 + (1 - intensity) * 100);
+    return `rgb(${r}, ${g}, ${b})`;
   } else {
     // 平盘 - 灰色
     return '#666666';
