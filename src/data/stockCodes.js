@@ -1,91 +1,166 @@
-// A 股全量股票代码 - 按行业分类
-// 包含：沪市主板、科创板、深市主板、创业板、北交所
+// A 股全市场股票代码 - 按行业分类
+// 包含沪深两市全部 A 股（约 5500+ 只）
 
-// 按行业分类的股票代码
-export const industryStocks = {
-  // 金融
-  银行: ['sh600036', 'sh600000', 'sh601166', 'sh601998', 'sh601818', 'sh600015', 'sh601328', 'sh601169', 'sh601009', 'sh600016', 'sz000001', 'sz002142', 'sz002936', 'sz002966'],
-  保险: ['sh601318', 'sh601628', 'sh601601', 'sh601336'],
-  证券: ['sh600030', 'sh601688', 'sh600999', 'sh601211', 'sh600837', 'sz000776', 'sz000166'],
-  
-  // 消费
-  白酒: ['sh600519', 'sz000858', 'sz000568', 'sh600702', 'sh600779', 'sh600809', 'sh603369', 'sz000596'],
-  食品饮料: ['sh600887', 'sh600597', 'sh603288', 'sz000895', 'sz002304', 'sz300999'],
-  家电: ['sz000333', 'sz000651', 'sh600690', 'sz002032'],
-  服装纺织: ['sh600398', 'sh601566', 'sz002563', 'sz300979'],
-  
-  // 医药
-  制药: ['sh600276', 'sh600436', 'sh603259', 'sz000538', 'sz002001', 'sz300122', 'sz300142', 'sz300347'],
-  医疗器械: ['sh600055', 'sh603658', 'sh688016', 'sz300003', 'sz300760'],
-  医疗服务: ['sh600763', 'sz300015', 'sz002390'],
-  
-  // 科技
-  半导体: ['sh688981', 'sh688012', 'sh603501', 'sh603986', 'sz002049', 'sz300782', 'sz300014'],
-  电子元件: ['sh600563', 'sh002138', 'sz002241', 'sz300433', 'sz300136'],
-  通信: ['sh600050', 'sh600498', 'sh603236', 'sz000063', 'sz300502'],
-  软件: ['sh600588', 'sh601360', 'sh688111', 'sz002230', 'sz300033'],
-  
-  // 新能源
-  光伏: ['sh601012', 'sh600438', 'sh601877', 'sz002129', 'sz300274', 'sz300316', 'sh688599'],
-  锂电池: ['sz300750', 'sz002812', 'sz002709', 'sz300014', 'sz300073', 'sh688005', 'sz002074'],
-  风电: ['sh601615', 'sh600905', 'sz002202', 'sh600021', 'sz300129'],
-  新能源汽车: ['sz002594', 'sz002050', 'sz300124', 'sh600066', 'sh601127'],
-  
-  // 制造
-  汽车: ['sh600104', 'sh601633', 'sz000625', 'sz000338', 'sh600741'],
-  机械制造: ['sh600031', 'sh601100', 'sz000425', 'sz002008', 'sz300024'],
-  化工: ['sh600309', 'sh601857', 'sh600028', 'sh600688', 'sz000792'],
-  有色: ['sh601899', 'sh600547', 'sh600489', 'sh601600', 'sz000975'],
-  钢铁: ['sh600019', 'sh000932', 'sh600507'],
-  建材: ['sh600585', 'sh600801', 'sz000877'],
-  
-  // 基建与地产
-  房地产: ['sh600048', 'sh601155', 'sz000002', 'sz000069', 'sh600383'],
-  基建: ['sh601668', 'sh601390', 'sh601800', 'sh601669'],
-  港口航运: ['sh601919', 'sh600018', 'sh601872', 'sh600026'],
-  航空: ['sh600009', 'sh600029', 'sh600115', 'sh601111'],
-  铁路: ['sh601006', 'sh601333'],
-  
-  // 传媒与互联网
-  传媒: ['sh600088', 'sh600373', 'sh601098', 'sh601928', 'sz002027', 'sz300413'],
-  游戏: ['sh600652', 'sh600633', 'sz002624', 'sz002555', 'sz300418', 'sz300315'],
-  电商: ['sh600415', 'sh601113', 'sz002024', 'sz300792'],
-};
+// 生成连续代码的辅助函数
+function generateRange(prefix, start, end) {
+  const codes = [];
+  for (let i = start; i <= end; i++) {
+    codes.push(`${prefix}${String(i).padStart(6, '0')}`);
+  }
+  return codes;
+}
+
+// 沪市主板 (600000-609999, 601000-601999, 603000-603999, 605000-605999)
+const shMainBoard = [
+  ...generateRange('sh', 600000, 609999),
+  ...generateRange('sh', 601000, 601999),
+  ...generateRange('sh', 603000, 603999),
+  ...generateRange('sh', 605000, 605999),
+];
+
+// 科创板 (688000-688999)
+const shSTAR = generateRange('sh', 688000, 688999);
+
+// 深市主板 (000001-000999, 001000-001999, 002000-002999, 003000-003999)
+const szMainBoard = [
+  ...generateRange('sz', 1, 999),
+  ...generateRange('sz', 1000, 1999),
+  ...generateRange('sz', 2000, 2999),
+  ...generateRange('sz', 3000, 3999),
+];
+
+// 创业板 (300000-301999)
+const szChiNext = generateRange('sz', 300000, 301999);
+
+// 北交所 (430000-438999, 830000-839999, 870000-879999, 920000-929999)
+const bjStocks = [
+  ...generateRange('bj', 430000, 438999),
+  ...generateRange('bj', 830000, 839999),
+  ...generateRange('bj', 870000, 879999),
+  ...generateRange('bj', 920000, 929999),
+];
 
 // 合并所有股票代码
-export const allStockCodes = Object.values(industryStocks).flat();
+export const allStockCodes = [
+  ...shMainBoard,
+  ...shSTAR,
+  ...szMainBoard,
+  ...szChiNext,
+  ...bjStocks,
+];
 
 // 去重
 export const uniqueStockCodes = [...new Set(allStockCodes)];
 
 // 热门股票代码（优先加载）
 export const hotStockCodes = [
-  'sh000001', // 上证指数
-  'sh600519', 'sh600036', 'sh601398', 'sz000858', 'sz000333', 'sz002594',
-  'sz300750', 'sh601318', 'sh600276', 'sh688981', 'sh601012', 'sz300274',
-  'sh600887', 'sh601888', 'sz300122', 'sz002415', 'sh600030', 'sz300059',
-  'sh688012', 'sh600309', 'sz002230', 'sh601688', 'sz000651', 'sh603501',
-  'sh600050', 'sh601899', 'sh601857', 'sz000768', 'sh600498', 'sz002142',
-  'sh603288', 'sz300999', 'sh688008', 'sh688111', 'sz300760', 'sh601615',
-  'sh688169', 'sz300316', 'sz002812', 'sz002709', 'sh688005', 'sz300073',
-  'sz300124', 'sh600690', 'sz002032', 'sz300413', 'sz002624', 'sh600104',
-  'sz000625', 'sh600031', 'sh601100', 'sh600309', 'sh601857', 'sh600019',
-  'sh600585', 'sh600048', 'sh601668', 'sh601390', 'sh600919', 'sh601319',
-  'sh601881', 'sh600958', 'sh601162', 'sz300433', 'sz002241', 'sz000725',
-  'sh600745', 'sh603986', 'sh601117', 'sh600426', 'sh600176', 'sh601669',
-  'sh600340', 'sh601868', 'sh600606', 'sh601155', 'sh601021', 'sh601816',
-  'sh600029', 'sh600115', 'sh601111', 'sh601006', 'sh601333', 'sh600031',
-  'sh601766', 'sh601727', 'sh601989', 'sh601186', 'sh601390', 'sh601800',
-  'sh601668', 'sh601618', 'sh601669', 'sh601117', 'sh601179', 'sh601608'
+  // 上证指数
+  'sh000001',
+  // 沪深300 成分股 - 大市值蓝筹股
+  'sh600519', // 贵州茅台
+  'sh600036', // 招商银行
+  'sh601398', // 工商银行
+  'sh601857', // 中国石油
+  'sh601288', // 农业银行
+  'sh601628', // 中国人寿
+  'sh601166', // 兴业银行
+  'sh601318', // 中国平安
+  'sh600887', // 伊利股份
+  'sh600309', // 万华化学
+  'sh601888', // 中国中免
+  'sh600009', // 上海机场
+  'sh600030', // 中信证券
+  'sz000858', // 五粮液
+  'sz000333', // 美的集团
+  'sz000651', // 格力电器
+  'sz002594', // 比亚迪
+  'sz000002', // 万科A
+  'sz300750', // 宁德时代
+  'sz300059', // 东方财富
+  'sz300015', // 爱尔眼科
+  'sz002415', // 海康威视
+  'sz000568', // 泸州老窖
+  'sz300122', // 智飞生物
+  'sz002230', // 科大讯飞
+  'sz300014', // 亿纬锂能
+  'sz002475', // 立讯精密
+  'sz300124', // 汇川技术
+  // 科创板
+  'sh688981', // 中芯国际
+  'sh688012', // 中微公司
+  'sh688036', // 传音控股
+  'sh688008', // 澜起科技
+  'sh688111', // 金山办公
+  'sh688169', // 石头科技
+  'sh688126', // 沪硅产业
+  'sh688366', // 昊海生科
+  // 更多热门股票
+  'sh600276', // 恒瑞医药
+  'sh601688', // 华泰证券
+  'sh600000', // 浦发银行
+  'sz000001', // 平安银行
+  'sz002142', // 宁波银行
+  'sz002001', // 新和成
+  'sz000768', // 中航西飞
+  'sh600893', // 航发动力
+  'sh601899', // 紫金矿业
+  'sh600547', // 山东黄金
+  'sz000975', // 银泰黄金
+  'sh601615', // 明阳智能
+  'sz002202', // 金风科技
+  'sz000591', // 太阳能
+  'sh600905', // 三峡能源
+  'sz300274', // 阳光电源
+  'sz300316', // 晶盛机电
+  'sh601012', // 隆基绿能
+  'sh600438', // 通威股份
+  'sz002129', // TCL中环
+  'sh603260', // 合盛硅业
+  'sz002709', // 天赐材料
+  'sz002812', // 恩捷股份
+  'sz300014', // 亿纬锂能
+  'sz300207', // 欣旺达
+  'sh688005', // 容百科技
+  'sh688567', // 孚能科技
+  'sz300073', // 当升科技
+  'sh688779', // 长远锂科
 ];
 
 // 按市场分类
 export const marketStocks = {
-  沪市主板: allStockCodes.filter(code => code.startsWith('sh6')),
-  科创板: allStockCodes.filter(code => code.startsWith('sh688')),
-  深市主板: allStockCodes.filter(code => code.startsWith('sz00')),
-  创业板: allStockCodes.filter(code => code.startsWith('sz300')),
-  北交所: allStockCodes.filter(code => code.startsWith('bj')),
+  沪市主板: hotStockCodes.filter(code => code.startsWith('sh6') && !code.startsWith('sh688')),
+  科创板: hotStockCodes.filter(code => code.startsWith('sh688')),
+  深市主板: hotStockCodes.filter(code => code.startsWith('sz00')),
+  创业板: hotStockCodes.filter(code => code.startsWith('sz300')),
+};
+
+// 按批次分组（腾讯API限制每次最多约100只）
+export function batchCodes(codes, batchSize = 100) {
+  const batches = [];
+  for (let i = 0; i < codes.length; i += batchSize) {
+    batches.push(codes.slice(i, i + batchSize));
+  }
+  return batches;
+}
+
+// 导出行业列表
+export const industries = Object.keys(industryStocks);
+
+// 导出所有代码
+export const allStockCodes = [...new Set([
+  ...hotStockCodes,
+  ...Object.values(industryStocks).flat()
+])];
+
+// 默认导出
+export default {
+  allStockCodes,
+  hotStockCodes,
+  industryStocks,
+  marketStocks,
+  industries,
+  batchCodes,
+};
 };
 
 // 导出行业列表
@@ -102,8 +177,9 @@ export function batchCodes(codes, batchSize = 100) {
 
 // 默认导出
 export default {
-  industryStocks,
   allStockCodes: uniqueStockCodes,
+  hotStockCodes,
+  industryStocks,
   marketStocks,
   industries,
   batchCodes,

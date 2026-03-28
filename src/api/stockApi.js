@@ -2,17 +2,6 @@ import { allStockCodes, batchCodes, industries, industryStocks } from '../data/s
 
 const API_BASE = 'https://qt.gtimg.cn/q=';
 
-// 使用 TextDecoder 解码 GBK
-function decodeGBK(uint8Array) {
-  try {
-    const decoder = new TextDecoder('gbk', { fatal: false });
-    return decoder.decode(uint8Array);
-  } catch (e) {
-    console.error('GBK decode error:', e);
-    return '';
-  }
-}
-
 // 解析腾讯 API 返回的数据
 async function parseStockData(text) {
   const stocks = [];
@@ -31,7 +20,7 @@ async function parseStockData(text) {
     if (parts.length < 10) continue;
     
     try {
-      // 直接使用返回的字符串（已经解码）
+      // 直接使用 GBK 解码后的字符串
       const name = parts[1] || '';
       const industry = parts[20] || '其他';
       
@@ -89,7 +78,7 @@ async function parseStockData(text) {
   return stocks;
 }
 
-// 获取股票数据（使用 ArrayBuffer 正确解码 GBK）
+// 获取股票数据
 export async function fetchStocks(codes = null) {
   const targetCodes = codes || allStockCodes.slice(0, 200);
   const batches = batchCodes(targetCodes, 100);
@@ -102,12 +91,24 @@ export async function fetchStocks(codes = null) {
       const codeStr = batch.join(',');
       const url = `${API_BASE}${codeStr}`;
       
-      // 使用 arrayBuffer 获取原始二进制数据
-      const response = await fetch(url);
+      // 使用 JSONP 方式获取数据
+      const script = document.createElement('script');
+      script.src = url;
+      
+      // 直接获取文本
+      const response = await fetch(url, {
+        headers: {
+          'Accept': 'text/plain, */*',
+        }
+      });
+      
+      // 获取 ArrayBuffer 并手动解码 GBK
       const buffer = await response.arrayBuffer();
+      const bytes = new Uint8Array(buffer);
       
       // 使用 GBK 解码
-      const text = decodeGBK(new Uint8Array(buffer));
+      const decoder = new TextDecoder('gbk', { fatal: false });
+      const text = decoder.decode(bytes);
       
       const stocks = await parseStockData(text);
       
