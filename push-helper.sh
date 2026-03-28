@@ -1,0 +1,22 @@
+#!/bin/bash
+# GitHub 推送助手
+
+echo "GitHub Token 已过期或无效"
+echo ""
+echo "请按以下步骤操作："
+echo ""
+echo "1. 访问 https://github.com/settings/tokens"
+echo "   生成新的 Personal Access Token"
+echo "   勾选 'repo' 权限"
+echo ""
+echo "2. 返回这里运行："
+echo "   cd ~/workspace/agent/workspace/projects/dapan-yuntu"
+echo "   git remote set-url origin https://ZZZZZZZZeng:YOUR_NEW_TOKEN@github.com/ZZZZZZZZeng/dapan-yuntu.git"
+echo "   git push -u origin master"
+echo ""
+echo "或者更简单的方式："
+echo ""
+echo "3. 直接在 Vercel 部署（不需要 GitHub）："
+echo "   cd ~/workspace/agent/workspace/projects/dapan-yuntu"
+echo "   npx vercel login"
+echo "   npx vercel --prod"
