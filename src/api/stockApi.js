@@ -2,7 +2,18 @@ import { allStockCodes, batchCodes, industries, industryStocks } from '../data/s
 
 const API_BASE = 'https://qt.gtimg.cn/q=';
 
-// 解析腾讯 API 返回的数据（使用原生 GBK 解码）
+// 使用 TextDecoder 解码 GBK
+function decodeGBK(uint8Array) {
+  try {
+    const decoder = new TextDecoder('gbk', { fatal: false });
+    return decoder.decode(uint8Array);
+  } catch (e) {
+    console.error('GBK decode error:', e);
+    return '';
+  }
+}
+
+// 解析腾讯 API 返回的数据
 async function parseStockData(text) {
   const stocks = [];
   
@@ -20,8 +31,9 @@ async function parseStockData(text) {
     if (parts.length < 10) continue;
     
     try {
-      // 中文名称（直接使用 API 返回的 UTF-8）
+      // 直接使用返回的字符串（已经解码）
       const name = parts[1] || '';
+      const industry = parts[20] || '其他';
       
       // 解析价格数据
       const currentPrice = parseFloat(parts[3]) || 0;
@@ -48,9 +60,6 @@ async function parseStockData(text) {
       if (prevClose > 0) {
         amplitude = ((high - low) / prevClose) * 100;
       }
-      
-      // 所属行业（从 API 返回）
-      const industry = parts[20] || '其他';
       
       // 市值（亿元）
       const marketCap = parseFloat(parts[44]) || 0;
@@ -80,13 +89,12 @@ async function parseStockData(text) {
   return stocks;
 }
 
-// 分批获取股票数据
+// 获取股票数据（使用 ArrayBuffer 正确解码 GBK）
 export async function fetchStocks(codes = null) {
-  const targetCodes = codes || allStockCodes.slice(0, 200); // 默认加载前200只
+  const targetCodes = codes || allStockCodes.slice(0, 200);
   const batches = batchCodes(targetCodes, 100);
   
   const allStocks = [];
-  const failedBatches = [];
   
   for (let i = 0; i < batches.length; i++) {
     const batch = batches[i];
@@ -94,21 +102,13 @@ export async function fetchStocks(codes = null) {
       const codeStr = batch.join(',');
       const url = `${API_BASE}${codeStr}`;
       
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Accept': '*/*',
-          'Referer': 'https://qt.gtimg.cn/',
-        },
-      });
+      // 使用 arrayBuffer 获取原始二进制数据
+      const response = await fetch(url);
+      const buffer = await response.arrayBuffer();
       
-      if (!response.ok) {
-        console.warn(`Batch ${i + 1}/${batches.length} failed: ${response.status}`);
-        failedBatches.push(batch);
-        continue;
-      }
+      // 使用 GBK 解码
+      const text = decodeGBK(new Uint8Array(buffer));
       
-      const text = await response.text();
       const stocks = await parseStockData(text);
       
       if (stocks.length > 0) {
@@ -116,11 +116,10 @@ export async function fetchStocks(codes = null) {
       }
       
       if (i < batches.length - 1) {
-        await new Promise(r => setTimeout(r, 50));
+        await new Promise(r => setTimeout(r, 100));
       }
     } catch (err) {
       console.error(`Batch ${i + 1} error:`, err);
-      failedBatches.push(batch);
     }
   }
   
