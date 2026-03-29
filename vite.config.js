@@ -8,15 +8,6 @@ export default defineConfig({
     outDir: 'dist',
     assetsDir: 'assets',
     sourcemap: false,
-    minify: 'terser',
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          'echarts': ['echarts'],
-          'react-vendor': ['react', 'react-dom'],
-        }
-      }
-    }
   },
   server: {
     port: 5173,
