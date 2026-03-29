@@ -13,7 +13,7 @@ function App() {
   const [stockData, setStockData] = useState([]);
   const [indexData, setIndexData] = useState({});
   const [lastUpdateTime, setLastUpdateTime] = useState(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false); // 仅标记刷新状态，不清除旧数据
   
   // 筛选状态
   const [selectedSectors, setSelectedSectors] = useState([]);
@@ -59,7 +59,8 @@ function App() {
 
   // 获取股票数据
   const fetchAllStockData = useCallback(async () => {
-    setIsLoading(true);
+    if (isReviewMode) return; // 复盘模式不刷新
+    setIsRefreshing(true);
     try {
       // 获取所有股票代码
       const allCodes = getAllStockCodes();
@@ -78,6 +79,7 @@ function App() {
         };
       });
       
+      // 新数据准备完成后才替换，没有空白期
       setStockData(dataWithSector);
       setLastUpdateTime(new Date());
       setMarketStats(calculateMarketStats(dataWithSector));
@@ -85,14 +87,14 @@ function App() {
       // 保存复盘时间点（每个30分钟存一次）
       const now = new Date();
       const timeKey = `${now.getHours().toString().padStart(2, '0')}:${Math.floor(now.getMinutes() / 30) * 30}`;
-      if (!reviewTimePoints.includes(timeKey) && !isReviewMode) {
+      if (!reviewTimePoints.includes(timeKey)) {
         setReviewTimePoints(prev => [...prev, timeKey]);
         setReviewHistory(prev => [...prev, { time: now, data: dataWithSector }]);
       }
     } catch (error) {
       console.error('获取股票数据失败:', error);
     } finally {
-      setIsLoading(false);
+      setIsRefreshing(false);
     }
   }, [isReviewMode, reviewTimePoints, calculateMarketStats]);
 
@@ -286,7 +288,12 @@ function App() {
   return (
     <div className="h-screen flex flex-col bg-gray-900 text-white">
       {/* 顶部指数栏 */}
-      <IndexBar indexData={indexData} lastUpdateTime={lastUpdateTime} />
+      <IndexBar 
+        indexData={indexData} 
+        lastUpdateTime={lastUpdateTime} 
+        isRefreshing={isRefreshing}
+        onRefresh={fetchAllStockData}
+      />
       
       {/* 主体内容 */}
       <div className="flex-1 flex overflow-hidden">
@@ -307,16 +314,6 @@ function App() {
         
         {/* 热力图主区域 */}
         <div id="heatmap-container" className="flex-1 relative bg-[#0a0e17]">
-          {/* 加载状态 */}
-          {isLoading && (
-            <div className="absolute inset-0 flex items-center justify-center bg-gray-900/80 z-50">
-              <div className="text-center">
-                <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                <p className="text-gray-300">正在加载市场数据...</p>
-              </div>
-            </div>
-          )}
-          
           <HeatMap
             stockData={filteredData}
             selectedSectors={selectedSectors}

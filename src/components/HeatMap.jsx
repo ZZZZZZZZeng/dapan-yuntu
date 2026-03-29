@@ -286,6 +286,10 @@ const HeatMap = ({
       series: [{
         data: chartData,
       }],
+      // 平滑动画过渡，0.3秒淡入
+      animation: true,
+      animationDuration: 300,
+      animationEasing: 'cubicOut',
     });
   }, [prepareChartData]);
 
