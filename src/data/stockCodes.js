@@ -42,6 +42,7 @@ export const sectors = {
   steel: { name: '钢铁', code: 'steel', color: '#7CB342' },
   nonferrous: { name: '有色金属', code: 'nonferrous', color: '#5E35B1' },
   coal: { name: '煤炭', code: 'coal', color: '#1E88E5' },
+  petroleum: { name: '石油石化', code: 'petroleum', color: '#FF9800' }, // 新增石油石化板块
   chemical: { name: '化工', code: 'chemical', color: '#43A047' },
   building: { name: '建筑', code: 'building', color: '#FB8C00' },
   realEstate: { name: '房地产', code: 'realEstate', color: '#E53935' },
@@ -78,9 +79,16 @@ export const indices = {
 // 获取行业股票代码列表的辅助函数
 // 由于全市场股票数量庞大，这里按行业维护核心股票列表
 export const stockList = {
+  // 石油石化
+  petroleum: [
+    'sh601857', 'sh600028', 'sh601808', 'sh600583', 'sh6000688',
+    'sh600339', 'sh600387', 'sh600179', 'sz000096', 'sz002207',
+    'sh600688', 'sh600546', 'sz000554', 'sz000637', 'sz000819'
+  ],
+  
   // 银行
   bank: [
-    'sh601398', 'sh601288', 'sh601857', 'sh601939', 'sh600036',
+    'sh601398', 'sh601288', 'sh601939', 'sh600036',
     'sh601988', 'sh601328', 'sh601166', 'sh600016', 'sh601998',
     'sh601818', 'sh600919', 'sh600926', 'sh601229', 'sh601169',
     'sh601009', 'sh601128', 'sh600908', 'sh601577', 'sh601665',
@@ -370,6 +378,10 @@ export const getStockSector = (code) => {
     if (codes.includes(code)) {
       return sectors[sector] || { name: '其他', code: 'other', color: '#9E9E9E' };
     }
+  }
+  // 兜底规则，避免归错
+  if (['sh601857', 'sh600028', 'sh601808'].includes(code)) {
+    return sectors.petroleum; // 强制石油石化板块
   }
   return { name: '其他', code: 'other', color: '#9E9E9E' };
 };

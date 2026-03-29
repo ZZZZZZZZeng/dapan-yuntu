@@ -68,16 +68,32 @@ function App() {
       // 分批获取数据
       const data = await fetchStockData(allCodes);
       
-      // 为每个股票添加行业信息
-      const dataWithSector = data.map(stock => {
-        const sectorInfo = getStockSector(stock.code);
-        return {
-          ...stock,
-          sector: sectorInfo.code,
-          sectorName: sectorInfo.name,
-          sectorColor: sectorInfo.color,
-        };
+      // 彻底过滤所有非个股内容：指数、ETF、基金、策略类全部移除
+      const onlyStocks = data.filter(stock => {
+        const code = stock.code || '';
+        // 过滤规则：
+        // 1. 指数：sh000、sz399开头
+        // 2. ETF/基金：sh50、sh159、sh510、sh511、sh512、sh513、sh515、sh516、sh588、sz159开头
+        // 3. 只保留纯个股：sh60/688、sz00/30开头的正常股票
+        const isIndex = code.startsWith('sh000') || code.startsWith('sz399');
+        const isETF = /^(sh|sz)(50|159|510|511|512|513|515|516|588)/.test(code);
+        const isStock = /^(sh60|sh68|sz00|sz30)/.test(code);
+        
+        return isStock && !isIndex && !isETF;
       });
+      
+      // 为每个股票添加行业信息，过滤无效数据
+      const dataWithSector = onlyStocks
+        .filter(stock => stock && stock.code && stock.stockName && (stock.circulationMarket || stock.totalMarket)) // 确保是有效股票
+        .map(stock => {
+          const sectorInfo = getStockSector(stock.code);
+          return {
+            ...stock,
+            sector: sectorInfo.code,
+            sectorName: sectorInfo.name,
+            sectorColor: sectorInfo.color,
+          };
+        });
       
       // 新数据准备完成后才替换，没有空白期
       setStockData(dataWithSector);
@@ -188,6 +204,19 @@ function App() {
     }
   }, []);
 
+  // 全屏切换功能
+  const handleToggleFullscreen = useCallback(() => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(err => {
+        console.error('进入全屏失败:', err);
+      });
+    } else {
+      document.exitFullscreen().catch(err => {
+        console.error('退出全屏失败:', err);
+      });
+    }
+  }, []);
+
   // 初始化数据
   useEffect(() => {
     fetchAllStockData();
@@ -293,6 +322,7 @@ function App() {
         lastUpdateTime={lastUpdateTime} 
         isRefreshing={isRefreshing}
         onRefresh={fetchAllStockData}
+        onToggleFullscreen={handleToggleFullscreen}
       />
       
       {/* 主体内容 */}
@@ -312,8 +342,8 @@ function App() {
           stockData={stockData}
         />
         
-        {/* 热力图主区域 */}
-        <div id="heatmap-container" className="flex-1 relative bg-[#0a0e17]">
+        {/* 热力图主区域，固定背景色和图表一致，避免更新时闪烁黑屏 */}
+        <div id="heatmap-container" className="flex-1 relative bg-[#0a0e17] overflow-hidden">
           <HeatMap
             stockData={filteredData}
             selectedSectors={selectedSectors}

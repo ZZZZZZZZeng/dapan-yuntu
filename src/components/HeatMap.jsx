@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback, memo } from 'react';
 import * as echarts from 'echarts';
 import { sectors, getStockSector } from '../data/stockCodes';
 import { getChangeColor } from '../api/stockApi';
@@ -83,17 +83,18 @@ const HeatMap = ({
             color: bgColor,
           },
           label: {
+            show: true, // 强制显示文字，即使色块很小
             color: textColor,
-            fontSize: 10,
-            lineHeight: 13,
-            overflow: 'truncate',
+            fontSize: 8.5, // 缩小字号，小色块也能放下
+            lineHeight: 11, // 减小行高，两行文字更紧凑
+            overflow: 'break',
             formatter: (params) => {
               const stock = params.data?.data;
               if (!stock) return params.name;
               const change = stock.changePercent || 0;
               const sign = change > 0 ? '+' : '';
-              const shortName = params.name.length > 4 ? params.name.slice(0, 4) : params.name;
-              return `${shortName}\n${sign}${change.toFixed(2)}%`;
+              const shortName = params.name.length > 3 ? params.name.slice(0, 3) : params.name; // 最多3字，小色块更易放下
+              return `${shortName}\n${sign}${change.toFixed(1)}%`; // 涨跌幅保留1位小数，更短
             },
           },
           data: stock,
@@ -111,16 +112,16 @@ const HeatMap = ({
         const changeColor = avgChange > 0 ? '#ff4d4f' : avgChange < 0 ? '#36d399' : '#9ca3af';
         
         return {
-          name: `${group.name} ${changeSign}${avgChange.toFixed(2)}% (${group.upCount}↑${group.downCount}↓)`,
+          name: group.name, // 只显示纯行业名称，和52etf一致
           itemStyle: {
-            borderColor: '#1e293b',
-            borderWidth: 3,
+            borderColor: '#0f172a',
+            borderWidth: 4, // 行业区域边框更粗更明显
             gapWidth: 2,
           },
           upperLabel: {
             show: true,
             height: 24,
-            color: changeColor,
+            color: '#e5e7eb',
             fontSize: 12,
             fontWeight: 'bold',
             backgroundColor: 'rgba(30, 41, 59, 0.9)',
@@ -142,6 +143,21 @@ const HeatMap = ({
     // 设置基础配置
     const option = {
       backgroundColor: '#0a0e17', // 深色科技风背景
+      // 让图表完全填充容器，不留边缘空白
+      grid: {
+        left: 0,
+        right: 0,
+        top: 0,
+        bottom: 0,
+        containLabel: true,
+      },
+      // 平滑动画，避免更新闪烁
+      animation: true,
+      animationDuration: 300, // 首次渲染动画时长
+      animationDurationUpdate: 80, // 数据更新动画极短，几乎无感知
+      animationEasing: 'cubicOut',
+      animationEasingUpdate: 'linear', // 线性过渡更平滑
+      animationThreshold: 1, // 所有更新都启用动画
       tooltip: {
         trigger: 'item',
         backgroundColor: 'rgba(17, 24, 39, 0.98)',
@@ -180,6 +196,8 @@ const HeatMap = ({
           type: 'treemap',
           width: '100%',
           height: '100%',
+          left: 'center',
+          top: 'center',
           roam: false,
           nodeClick: false,
           breadcrumb: {
@@ -197,6 +215,7 @@ const HeatMap = ({
               return ` ${params.name}`;
             },
           },
+
           // 股票标签（下层）
           label: {
             show: true,
@@ -237,9 +256,9 @@ const HeatMap = ({
             // 股票层级
             {
               itemStyle: {
-                borderColor: '#0f172a',
+                borderColor: '#1e293b',
                 borderWidth: 1,
-                gapWidth: 1,
+                gapWidth: 0, // 个股之间无间隙，排列更紧凑
               },
               label: {
                 show: true,
@@ -299,20 +318,25 @@ const HeatMap = ({
 
     const chartData = prepareChartData();
     
-    chartInstance.current.setOption({
-      series: [{
-        data: chartData,
-      }],
-      // 平滑动画过渡，0.3秒淡入
-      animation: true,
-      animationDuration: 300,
-      animationEasing: 'cubicOut',
+    // 请求动画帧时机更新，避免浏览器掉帧
+    requestAnimationFrame(() => {
+      // 增量更新配置，避免全量重绘导致闪烁
+      chartInstance.current?.setOption({
+        series: [{
+          data: chartData,
+        }],
+      }, {
+        notMerge: false, // 合并配置，不替换整个图表
+        lazyUpdate: true, // 延迟更新，批量处理重绘
+        silent: true, // 静默更新，不触发额外事件
+      });
     });
   }, [prepareChartData]);
 
   return (
-    <div className="relative w-full h-full">
-      <div ref={chartRef} className="w-full h-full" />
+    // 固定背景色，和ECharts完全一致，任何情况都不会出现色差
+    <div className="relative w-full h-full p-1 bg-[#0a0e17]">
+      <div ref={chartRef} className="w-full h-full bg-[#0a0e17]" />
       
       {/* 加载状态 */}
       {isLoading && (
@@ -390,4 +414,5 @@ const HeatMap = ({
   );
 };
 
-export default HeatMap;
+// 使用memo包裹组件，仅在props变化时重渲染
+export default memo(HeatMap);

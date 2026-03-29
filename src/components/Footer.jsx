@@ -15,13 +15,13 @@ const Footer = ({
 
   const timePoints = reviewTimePoints.length > 0 ? reviewTimePoints : defaultTimePoints;
 
-  // 颜色阶配置
+  // 颜色阶配置，和涨跌幅颜色映射完全对齐
   const colorStops = [
     { percent: '-4%', color: '#14532d' },
     { percent: '-3%', color: '#15803d' },
     { percent: '-2%', color: '#16a34a' },
     { percent: '-1%', color: '#86efac' },
-    { percent: '0%', color: '#6b7280' },
+    { percent: '0%', color: '#475569' },
     { percent: '+1%', color: '#fca5a5' },
     { percent: '+2%', color: '#dc2626' },
     { percent: '+3%', color: '#991b1b' },

@@ -1,6 +1,6 @@
 import React from 'react';
 
-const IndexBar = ({ indexData, lastUpdateTime, isRefreshing, onRefresh }) => {
+const IndexBar = ({ indexData, lastUpdateTime, isRefreshing, onRefresh, onToggleFullscreen }) => {
   // 核心指数列表
   const coreIndices = [
     { code: 'sh000001', name: '上证指数' },
@@ -52,6 +52,22 @@ const IndexBar = ({ indexData, lastUpdateTime, isRefreshing, onRefresh }) => {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
           </svg>
           {isRefreshing && <span className="text-xs">更新中...</span>}
+        </button>
+
+        {/* 全屏切换按钮 */}
+        <button 
+          className="flex items-center text-gray-400 hover:text-white"
+          onClick={onToggleFullscreen}
+          title="切换全屏"
+        >
+          <svg 
+            className="w-4 h-4" 
+            fill="none" 
+            stroke="currentColor" 
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 0h-4m4 0l-5-5" />
+          </svg>
         </button>
         
         <div className="text-gray-400">
