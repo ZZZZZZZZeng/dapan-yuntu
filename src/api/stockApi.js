@@ -141,63 +141,101 @@ function parseStockData(dataStr) {
   };
 }
 
-// 批量获取股票数据
-export async function fetchStockData(stockCodes) {
+// 简单缓存，缓存时间2秒
+const cache = new Map();
+const CACHE_TTL = 2000;
+
+// 批量获取股票数据 - 带重试和缓存
+export async function fetchStockData(stockCodes, retries = 2) {
   if (!stockCodes || stockCodes.length === 0) {
     return [];
   }
   
-  // 分批处理，每批最多60只（腾讯API限制）
-  const batchSize = 60;
+  // 分批处理，每批最多50只（降低限流风险）
+  const batchSize = 50;
   const results = [];
   
   for (let i = 0; i < stockCodes.length; i += batchSize) {
     const batch = stockCodes.slice(i, i + batchSize);
-    const codesStr = batch.join(',');
+    const cacheKey = batch.sort().join(',');
     
-    try {
-      // 使用腾讯API - 添加随机参数避免缓存
-      const timestamp = Date.now();
-      const url = `http://qt.gtimg.cn/q=${codesStr}?_=${timestamp}`;
-      
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Accept': 'text/plain, */*',
-        },
-      });
-      
-      if (!response.ok) {
-        console.warn(`API请求失败: ${response.status}`);
-        continue;
-      }
-      
-      // 获取ArrayBuffer并解码GBK
-      const buffer = await response.arrayBuffer();
-      const text = gbkDecoder.decodeFromBuffer(buffer);
-      
-      // 解析返回的数据
-      const lines = text.split('\n');
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed || !trimmed.includes('=')) continue;
+    // 检查缓存
+    const cached = cache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+      results.push(...cached.data);
+      continue;
+    }
+    
+    let attempt = 0;
+    let success = false;
+    
+    while (attempt <= retries && !success) {
+      try {
+        const codesStr = batch.join(',');
+        const timestamp = Date.now();
+        const url = `http://qt.gtimg.cn/q=${codesStr}?_=${timestamp}`;
         
-        // 提取变量名和数据
-        const match = trimmed.match(/v_([sh]\w+)="(.+)"/);
-        if (match) {
-          const stockCode = match[1];
-          const dataStr = match[2];
-          const parsedData = parseStockData(dataStr);
-          if (parsedData && parsedData.stockName) {
-            results.push({
-              code: stockCode,
-              ...parsedData
-            });
+        const response = await fetch(url, {
+          method: 'GET',
+          headers: {
+            'Accept': 'text/plain, */*',
+          },
+          signal: AbortSignal.timeout(5000), // 5秒超时
+        });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        
+        // 获取ArrayBuffer并解码GBK
+        const buffer = await response.arrayBuffer();
+        const text = gbkDecoder.decodeFromBuffer(buffer);
+        
+        // 解析返回的数据
+        const batchResults = [];
+        const lines = text.split('\n');
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || !trimmed.includes('=')) continue;
+          
+          // 提取变量名和数据
+          const match = trimmed.match(/v_([sh]\w+)="(.+)"/);
+          if (match) {
+            const stockCode = match[1];
+            const dataStr = match[2];
+            const parsedData = parseStockData(dataStr);
+            if (parsedData && parsedData.stockName) {
+              batchResults.push({
+                code: stockCode,
+                ...parsedData
+              });
+            }
           }
         }
+        
+        // 存入缓存
+        cache.set(cacheKey, {
+          timestamp: Date.now(),
+          data: batchResults,
+        });
+        
+        results.push(...batchResults);
+        success = true;
+      } catch (error) {
+        attempt++;
+        console.warn(`批量请求失败 (尝试 ${attempt}/${retries+1}):`, error);
+        if (attempt > retries) {
+          console.error('批量请求最终失败:', batch);
+          // 失败时尝试使用缓存（如果有旧数据）
+          if (cached) {
+            console.log('使用缓存数据降级');
+            results.push(...cached.data);
+          }
+        } else {
+          // 重试前等待
+          await new Promise(resolve => setTimeout(resolve, 500 * attempt));
+        }
       }
-    } catch (error) {
-      console.error('获取股票数据失败:', error);
     }
   }
   

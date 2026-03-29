@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import html2canvas from 'html2canvas';
 import Header from './components/Header';
 import Sidebar from './components/Sidebar';
@@ -80,8 +80,8 @@ function App() {
     }
   }, []);
 
-  // 过滤数据
-  useEffect(() => {
+  // 过滤数据 - 使用useMemo缓存结果，避免重复计算
+  const filteredData = useMemo(() => {
     let filtered = [...stockData];
     
     // 按行业筛选
@@ -91,6 +91,9 @@ function App() {
     
     // 按指数筛选（简化版本：按代码前缀分类，后续可接入真实成分股数据）
     if (selectedIndex) {
+      // 提前排序大市值，避免重复排序
+      const sortedByMarketCap = [...filtered].sort((a,b) => (b.totalMarket || 0) - (a.totalMarket || 0));
+      
       filtered = filtered.filter(stock => {
         switch(selectedIndex) {
           case 'sh000001': // 上证指数：60/688开头
@@ -102,9 +105,9 @@ function App() {
           case 'sh000688': // 科创50：688开头
             return stock.code.startsWith('sh688');
           case 'sh000016': // 上证50：暂时筛选头部50只大市值
-            return filtered.sort((a,b) => (b.totalMarket || 0) - (a.totalMarket || 0)).slice(0,50).some(s => s.code === stock.code);
+            return sortedByMarketCap.slice(0,50).some(s => s.code === stock.code);
           case 'sh000300': // 沪深300：暂时筛选头部300只大市值
-            return filtered.sort((a,b) => (b.totalMarket || 0) - (a.totalMarket || 0)).slice(0,300).some(s => s.code === stock.code);
+            return sortedByMarketCap.slice(0,300).some(s => s.code === stock.code);
           default:
             return true;
         }
@@ -119,7 +122,7 @@ function App() {
       });
     }
     
-    setFilteredData(filtered);
+    return filtered;
   }, [stockData, selectedSectors, selectedIndex, filterRange]);
 
   // 初始化数据

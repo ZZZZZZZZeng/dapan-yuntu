@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import * as echarts from 'echarts';
 import { sectors, getStockSector } from '../data/stockCodes';
+import { getChangeColor } from '../api/stockApi';
 
 const HeatMap = ({ 
   stockData, 
@@ -16,17 +17,14 @@ const HeatMap = ({
   const [isLoading, setIsLoading] = useState(false);
   const [hoveredStock, setHoveredStock] = useState(null);
 
-  // 获取涨跌幅对应的颜色
-  const getChangeColor = useCallback((changePercent) => {
-    if (changePercent > 5) return '#7f1d1d'; // 深红
-    if (changePercent > 3) return '#991b1b'; // 红
-    if (changePercent > 1) return '#dc2626'; // 浅红
-    if (changePercent > 0) return '#fca5a5'; // 淡红
-    if (changePercent === 0) return '#6b7280'; // 灰色
-    if (changePercent > -1) return '#86efac'; // 淡绿
-    if (changePercent > -3) return '#16a34a'; // 浅绿
-    if (changePercent > -5) return '#15803d'; // 绿
-    return '#14532d'; // 深绿
+  // 获取文字颜色（根据背景色亮度决定黑白）
+  const getTextColor = useCallback((bgColor) => {
+    // 简单的亮度计算
+    const r = parseInt(bgColor.slice(1, 3), 16);
+    const g = parseInt(bgColor.slice(3, 5), 16);
+    const b = parseInt(bgColor.slice(5, 7), 16);
+    const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+    return brightness > 128 ? '#000000' : '#ffffff';
   }, []);
 
   // 获取文字颜色（根据背景色亮度决定黑白）
@@ -231,6 +229,18 @@ const HeatMap = ({
       if (params.data?.data) {
         onDrillDown?.(params.data.data);
       }
+    });
+
+    // 鼠标悬浮事件
+    chartInstance.current.on('mouseover', (params) => {
+      if (params.data?.data) {
+        setHoveredStock(params.data.data);
+      }
+    });
+
+    // 鼠标移出事件
+    chartInstance.current.on('mouseout', () => {
+      setHoveredStock(null);
     });
 
     // 响应式
