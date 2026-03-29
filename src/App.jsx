@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import html2canvas from 'html2canvas';
 import Header from './components/Header';
 import Sidebar from './components/Sidebar';
 import HeatMap from './components/HeatMap';
@@ -88,9 +89,26 @@ function App() {
       filtered = filtered.filter(stock => selectedSectors.includes(stock.sector));
     }
     
-    // 按指数筛选（这里简化处理，实际应该根据指数成分股）
+    // 按指数筛选（简化版本：按代码前缀分类，后续可接入真实成分股数据）
     if (selectedIndex) {
-      // 可以在这里添加指数成分股过滤逻辑
+      filtered = filtered.filter(stock => {
+        switch(selectedIndex) {
+          case 'sh000001': // 上证指数：60/688开头
+            return stock.code.startsWith('sh60') || stock.code.startsWith('sh688');
+          case 'sz399001': // 深证成指：00/30开头
+            return stock.code.startsWith('sz00') || stock.code.startsWith('sz30');
+          case 'sz399006': // 创业板指：30开头
+            return stock.code.startsWith('sz30');
+          case 'sh000688': // 科创50：688开头
+            return stock.code.startsWith('sh688');
+          case 'sh000016': // 上证50：暂时筛选头部50只大市值
+            return filtered.sort((a,b) => (b.totalMarket || 0) - (a.totalMarket || 0)).slice(0,50).some(s => s.code === stock.code);
+          case 'sh000300': // 沪深300：暂时筛选头部300只大市值
+            return filtered.sort((a,b) => (b.totalMarket || 0) - (a.totalMarket || 0)).slice(0,300).some(s => s.code === stock.code);
+          default:
+            return true;
+        }
+      });
     }
     
     // 按涨跌幅范围筛选
@@ -112,17 +130,41 @@ function App() {
 
   // 自动刷新
   useEffect(() => {
-    refreshIntervalRef.current = setInterval(() => {
-      fetchAllStockData();
-      fetchAllIndexData();
-    }, 8000); // 8秒刷新
+    if (!isReviewMode) { // 复盘模式下停止自动刷新
+      refreshIntervalRef.current = setInterval(() => {
+        fetchAllStockData();
+        fetchAllIndexData();
+      }, 8000); // 8秒刷新
+    }
 
     return () => {
       if (refreshIntervalRef.current) {
         clearInterval(refreshIntervalRef.current);
       }
     };
-  }, [fetchAllStockData, fetchAllIndexData]);
+  }, [fetchAllStockData, fetchAllIndexData, isReviewMode]);
+
+  // 复盘模式键盘导航
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (!isReviewMode) return;
+      
+      switch(e.key) {
+        case 'ArrowLeft': // 左方向键：上一个历史
+          handleReviewMode('prev');
+          break;
+        case 'ArrowRight': // 右方向键：下一个历史
+          handleReviewMode('next');
+          break;
+        case 'Escape': // ESC键：退出复盘模式
+          handleReviewMode('exit');
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isReviewMode, currentReviewIndex, reviewHistory]);
 
   // 处理复盘模式
   const handleReviewMode = (action) => {
@@ -153,11 +195,29 @@ function App() {
   };
 
   // 截图功能
-  const handleScreenshot = () => {
-    // 这里可以实现截图功能
-    // 可以使用 html2canvas 库来实现
-    alert('截图功能即将上线');
-  };
+  const handleScreenshot = useCallback(async () => {
+    try {
+      // 获取主容器
+      const container = document.getElementById('heatmap-container');
+      if (!container) return;
+
+      // 生成截图
+      const canvas = await html2canvas(container, {
+        backgroundColor: '#0f172a',
+        scale: 2, // 高清截图
+        useCORS: true,
+      });
+
+      // 转换为图片并下载
+      const link = document.createElement('a');
+      link.download = `大盘云图-${new Date().toLocaleString('zh-CN')}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    } catch (error) {
+      console.error('截图失败:', error);
+      alert('截图失败，请重试');
+    }
+  }, []);
 
   return (
     <div className="h-screen flex flex-col bg-gray-950">
@@ -179,7 +239,7 @@ function App() {
         />
         
         {/* 热力图主区域 */}
-        <div className="flex-1 relative">
+        <div id="heatmap-container" className="flex-1 relative">
           <HeatMap
             stockData={filteredData}
             selectedSectors={selectedSectors}
