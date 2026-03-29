@@ -4,7 +4,7 @@ import Sidebar from './components/Sidebar';
 import HeatMap from './components/HeatMap';
 import Footer from './components/Footer';
 import { fetchStockData, fetchIndexData } from './api/stockApi';
-import { getAllStockCodes, stockList, sectors, indices } from './data/stockCodes';
+import { getAllStockCodes, stockList, sectors, indices, getStockSector } from './data/stockCodes';
 
 function App() {
   // 数据状态

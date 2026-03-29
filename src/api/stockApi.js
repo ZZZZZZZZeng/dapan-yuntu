@@ -97,34 +97,33 @@ const FIELD_MAPPING = {
 };
 
 // 解析单条股票数据
+// 腾讯API字段顺序参考：https://qt.gtimg.cn/q=sh600000
 function parseStockData(dataStr) {
   if (!dataStr || dataStr.length < 10) return null;
   
   const fields = dataStr.split('~');
-  if (fields.length < 10) return null;
+  if (fields.length < 30) return null;
   
-  // 提取基本信息
-  const stockCode = fields[0] || '';
+  // 提取基本信息 - 腾讯API返回字段顺序
   const stockName = fields[1] || '';
-  const price = parseFloat(fields[2]) || 0;
-  const close = parseFloat(fields[3]) || 0;
-  const open = parseFloat(fields[4]) || 0;
-  const high = parseFloat(fields[5]) || 0;
-  const low = parseFloat(fields[6]) || 0;
-  const volume = parseFloat(fields[7]) || 0; // 成交量（万手）
-  const turnover = parseFloat(fields[8]) || 0; // 成交额（万）
-  const turnoverRate = parseFloat(fields[9]) || 0; // 换手率
+  const price = parseFloat(fields[3]) || 0; // 当前价格
+  const close = parseFloat(fields[4]) || 0; // 昨收
+  const open = parseFloat(fields[5]) || 0; // 今开
+  const high = parseFloat(fields[33]) || 0; // 最高
+  const low = parseFloat(fields[34]) || 0; // 最低
+  const volume = parseFloat(fields[36]) || 0; // 成交量（手）
+  const turnover = parseFloat(fields[37]) || 0; // 成交额（万）
+  const turnoverRate = parseFloat(fields[38]) || 0; // 换手率%
   
-  // 计算涨跌幅
-  const change = price - close;
-  const changePercent = close > 0 ? (change / close) * 100 : 0;
+  // 涨跌幅（API直接返回，避免计算错误）
+  const change = parseFloat(fields[31]) || (price - close); // 涨跌额
+  const changePercent = parseFloat(fields[32]) || (close > 0 ? (change / close) * 100 : 0); // 涨跌幅%
   
   // 流通市值和总市值
-  const circulationMarket = parseFloat(fields[10]) || 0;
-  const totalMarket = parseFloat(fields[11]) || 0;
+  const circulationMarket = (parseFloat(fields[44]) || 0) * 10000; // 流通市值（万元 -> 元）
+  const totalMarket = (parseFloat(fields[45]) || 0) * 10000; // 总市值（万元 -> 元）
   
   return {
-    stockCode,
     stockName,
     price,
     close,

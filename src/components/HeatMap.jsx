@@ -9,6 +9,7 @@ const HeatMap = ({
   filterRange,
   onStockClick,
   onDrillDown,
+  isReviewMode = false,
 }) => {
   const chartRef = useRef(null);
   const chartInstance = useRef(null);
