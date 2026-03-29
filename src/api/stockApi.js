@@ -260,7 +260,7 @@ export async function fetchStockDetail(stockCode) {
 // 按行业获取股票
 export function getStocksBySector(sectorCode) {
   // 动态导入避免循环依赖
-  const { stockList } = require('./stockCodes.js');
+  const { stockList } = require('../data/stockCodes.js');
   return stockList[sectorCode] || [];
 }
 

@@ -10,7 +10,6 @@ import { getAllStockCodes, stockList, sectors, indices, getStockSector } from '.
 function App() {
   // 数据状态
   const [stockData, setStockData] = useState([]);
-  const [filteredData, setFilteredData] = useState([]);
   const [indexData, setIndexData] = useState({});
   const [lastUpdateTime, setLastUpdateTime] = useState(null);
   const [isLoading, setIsLoading] = useState(false);

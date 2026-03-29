@@ -27,16 +27,6 @@ const HeatMap = ({
     return brightness > 128 ? '#000000' : '#ffffff';
   }, []);
 
-  // 获取文字颜色（根据背景色亮度决定黑白）
-  const getTextColor = useCallback((bgColor) => {
-    // 简单的亮度计算
-    const r = parseInt(bgColor.slice(1, 3), 16);
-    const g = parseInt(bgColor.slice(3, 5), 16);
-    const b = parseInt(bgColor.slice(5, 7), 16);
-    const brightness = (r * 299 + g * 587 + b * 114) / 1000;
-    return brightness > 128 ? '#000000' : '#ffffff';
-  }, []);
-
   // 准备ECharts数据
   const prepareChartData = useCallback(() => {
     if (!stockData || stockData.length === 0) {
