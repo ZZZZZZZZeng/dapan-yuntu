@@ -77,14 +77,22 @@ const HeatMap = ({
         
         sectorGroups[assignedSector].children.push({
           name: stock.stockName || stock.code,
-          value: stock.totalMarket || stock.circulationMarket || 100,
+          value: stock.circulationMarket || stock.totalMarket || 100, // 面积对应流通市值
           code: stock.code,
           itemStyle: {
             color: bgColor,
           },
           label: {
             color: textColor,
-            formatter: '{name}\n{c}',
+            fontSize: 11,
+            lineHeight: 14,
+            formatter: (params) => {
+              const stock = params.data?.data;
+              if (!stock) return params.name;
+              const change = stock.changePercent || 0;
+              const sign = change > 0 ? '+' : '';
+              return `${params.name}\n${sign}${change.toFixed(2)}%`;
+            },
           },
           data: stock,
         });

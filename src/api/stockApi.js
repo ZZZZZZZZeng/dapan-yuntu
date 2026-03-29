@@ -257,6 +257,37 @@ export async function fetchStockDetail(stockCode) {
   return data[0] || null;
 }
 
+// 获取个股K线数据（日K）
+export async function fetchStockKline(stockCode, days = 30) {
+  try {
+    // 东方财富K线API示例
+    const code = stockCode.replace('sh', '1').replace('sz', '0');
+    const url = `https://push2his.eastmoney.com/api/qt/stock/kline/get?secid=${code}.${stockCode.startsWith('sh') ? 1 : 0}&ut=fa5fd1943c7b386f172d6893dbfba10b&fields1=f1%2Cf2%2Cf3%2Cf4%2Cf5&fields2=f51%2Cf52%2Cf53%2Cf54%2Cf55%2Cf56%2Cf57&klt=101&fqt=1&end=20500101&lmt=${days}`;
+    
+    const response = await fetch(url);
+    const result = await response.json();
+    
+    if (result?.data?.klines) {
+      return result.data.klines.map(line => {
+        const [date, open, close, high, low, volume, amount] = line.split(',');
+        return {
+          date,
+          open: parseFloat(open),
+          close: parseFloat(close),
+          high: parseFloat(high),
+          low: parseFloat(low),
+          volume: parseFloat(volume),
+          amount: parseFloat(amount),
+        };
+      });
+    }
+    return [];
+  } catch (error) {
+    console.error('获取K线数据失败:', error);
+    return [];
+  }
+}
+
 // 按行业获取股票
 export function getStocksBySector(sectorCode) {
   // 动态导入避免循环依赖

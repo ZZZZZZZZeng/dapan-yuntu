@@ -4,7 +4,8 @@ import Header from './components/Header';
 import Sidebar from './components/Sidebar';
 import HeatMap from './components/HeatMap';
 import Footer from './components/Footer';
-import { fetchStockData, fetchIndexData } from './api/stockApi';
+import IndexBar from './components/IndexBar';
+import { fetchStockData, fetchIndexData, fetchStockKline } from './api/stockApi';
 import { getAllStockCodes, stockList, sectors, indices, getStockSector } from './data/stockCodes';
 
 function App() {
@@ -16,17 +17,46 @@ function App() {
   
   // 筛选状态
   const [selectedSectors, setSelectedSectors] = useState([]);
+  const [selectedMarket, setSelectedMarket] = useState('all'); // all/sh/sz/cy/kc
   const [selectedIndex, setSelectedIndex] = useState(null);
-  const [filterRange, setFilterRange] = useState(null);
+  const [filterRange, setFilterRange] = useState({ min: -10, max: 10 });
   
   // 复盘模式
   const [isReviewMode, setIsReviewMode] = useState(false);
   const [reviewHistory, setReviewHistory] = useState([]);
   const [currentReviewIndex, setCurrentReviewIndex] = useState(-1);
+  const [reviewTimePoints, setReviewTimePoints] = useState([]);
+  
+  // K线弹窗
+  const [showKlineModal, setShowKlineModal] = useState(false);
+  const [selectedStock, setSelectedStock] = useState(null);
+  const [klineData, setKlineData] = useState([]);
+  
+  // 统计数据
+  const [marketStats, setMarketStats] = useState({
+    up: 0,
+    flat: 0,
+    down: 0,
+    volume: 0,
+    volumeDiff: 0,
+  });
   
   // 自动刷新定时器
   const refreshIntervalRef = useRef(null);
   
+  // 计算市场统计数据
+  const calculateMarketStats = useCallback((data) => {
+    let up = 0, flat = 0, down = 0, volume = 0;
+    data.forEach(stock => {
+      const change = stock.changePercent || 0;
+      if (change > 0) up++;
+      else if (change < 0) down++;
+      else flat++;
+      volume += stock.turnover || 0;
+    });
+    return { up, flat, down, volume: volume / 10000 }; // 转为万亿
+  }, []);
+
   // 获取股票数据
   const fetchAllStockData = useCallback(async () => {
     setIsLoading(true);
@@ -50,17 +80,21 @@ function App() {
       
       setStockData(dataWithSector);
       setLastUpdateTime(new Date());
+      setMarketStats(calculateMarketStats(dataWithSector));
       
-      // 如果是复盘模式，保存历史数据
-      if (isReviewMode) {
-        setReviewHistory(prev => [...prev, { time: new Date(), data: dataWithSector }]);
+      // 保存复盘时间点（每个30分钟存一次）
+      const now = new Date();
+      const timeKey = `${now.getHours().toString().padStart(2, '0')}:${Math.floor(now.getMinutes() / 30) * 30}`;
+      if (!reviewTimePoints.includes(timeKey) && !isReviewMode) {
+        setReviewTimePoints(prev => [...prev, timeKey]);
+        setReviewHistory(prev => [...prev, { time: now, data: dataWithSector }]);
       }
     } catch (error) {
       console.error('获取股票数据失败:', error);
     } finally {
       setIsLoading(false);
     }
-  }, [isReviewMode]);
+  }, [isReviewMode, reviewTimePoints, calculateMarketStats]);
 
   // 获取指数数据
   const fetchAllIndexData = useCallback(async () => {
@@ -82,6 +116,22 @@ function App() {
   // 过滤数据 - 使用useMemo缓存结果，避免重复计算
   const filteredData = useMemo(() => {
     let filtered = [...stockData];
+    
+    // 按市场筛选
+    switch(selectedMarket) {
+      case 'sh': // 上证A股
+        filtered = filtered.filter(stock => stock.code.startsWith('sh'));
+        break;
+      case 'sz': // 深证A股
+        filtered = filtered.filter(stock => stock.code.startsWith('sz00'));
+        break;
+      case 'cy': // 创业板
+        filtered = filtered.filter(stock => stock.code.startsWith('sz30'));
+        break;
+      case 'kc': // 科创板
+        filtered = filtered.filter(stock => stock.code.startsWith('sh688'));
+        break;
+    }
     
     // 按行业筛选
     if (selectedSectors.length > 0) {
@@ -122,7 +172,19 @@ function App() {
     }
     
     return filtered;
-  }, [stockData, selectedSectors, selectedIndex, filterRange]);
+  }, [stockData, selectedSectors, selectedIndex, filterRange, selectedMarket]);
+
+  // 双击股票显示K线
+  const handleStockDoubleClick = useCallback(async (stock) => {
+    setSelectedStock(stock);
+    setShowKlineModal(true);
+    try {
+      const data = await fetchStockKline(stock.code);
+      setKlineData(data);
+    } catch (error) {
+      console.error('获取K线数据失败:', error);
+    }
+  }, []);
 
   // 初始化数据
   useEffect(() => {
@@ -222,12 +284,9 @@ function App() {
   }, []);
 
   return (
-    <div className="h-screen flex flex-col bg-gray-950">
-      {/* 顶部导航 */}
-      <Header 
-        onRefresh={fetchAllStockData}
-        lastUpdateTime={lastUpdateTime}
-      />
+    <div className="h-screen flex flex-col bg-gray-800 text-white">
+      {/* 顶部指数栏 */}
+      <IndexBar indexData={indexData} lastUpdateTime={lastUpdateTime} />
       
       {/* 主体内容 */}
       <div className="flex-1 flex overflow-hidden">
@@ -235,20 +294,36 @@ function App() {
         <Sidebar
           selectedSectors={selectedSectors}
           onSectorChange={setSelectedSectors}
+          selectedMarket={selectedMarket}
+          onMarketChange={setSelectedMarket}
           selectedIndex={selectedIndex}
           onIndexChange={setSelectedIndex}
+          filterRange={filterRange}
+          onFilterChange={setFilterRange}
+          marketStats={marketStats}
+          onScreenshot={handleScreenshot}
           stockData={stockData}
         />
         
         {/* 热力图主区域 */}
-        <div id="heatmap-container" className="flex-1 relative">
+        <div id="heatmap-container" className="flex-1 relative bg-gray-900">
+          {/* 加载状态 */}
+          {isLoading && (
+            <div className="absolute inset-0 flex items-center justify-center bg-gray-900/80 z-50">
+              <div className="text-center">
+                <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                <p className="text-gray-300">正在加载市场数据...</p>
+              </div>
+            </div>
+          )}
+          
           <HeatMap
             stockData={filteredData}
             selectedSectors={selectedSectors}
             selectedIndex={selectedIndex}
             filterRange={filterRange}
             onStockClick={(stock) => console.log('点击股票:', stock)}
-            onDrillDown={(stock) => console.log('双击股票:', stock)}
+            onDrillDown={handleStockDoubleClick}
             isReviewMode={isReviewMode}
           />
         </div>
@@ -256,13 +331,40 @@ function App() {
       
       {/* 底部栏 */}
       <Footer
-        onFilterChange={setFilterRange}
-        activeFilter={filterRange}
-        onReviewMode={handleReviewMode}
+        reviewTimePoints={reviewTimePoints}
+        currentReviewIndex={currentReviewIndex}
+        onReviewTimeChange={(index) => {
+          setCurrentReviewIndex(index);
+          setStockData(reviewHistory[index].data);
+          setIsReviewMode(true);
+        }}
+        onExitReview={() => {
+          setIsReviewMode(false);
+          setCurrentReviewIndex(-1);
+          fetchAllStockData();
+        }}
         isReviewMode={isReviewMode}
-        currentTime={lastUpdateTime}
-        onScreenshot={handleScreenshot}
       />
+      
+      {/* K线弹窗 */}
+      {showKlineModal && selectedStock && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50" onClick={() => setShowKlineModal(false)}>
+          <div className="bg-gray-800 rounded-lg p-4 w-4/5 max-w-3xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-bold">{selectedStock.stockName} ({selectedStock.code})</h3>
+              <button 
+                className="text-gray-400 hover:text-white" 
+                onClick={() => setShowKlineModal(false)}
+              >
+                ✕
+              </button>
+            </div>
+            <div className="h-80 bg-gray-900 rounded flex items-center justify-center">
+              <p className="text-gray-400">K线图功能开发中...</p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
