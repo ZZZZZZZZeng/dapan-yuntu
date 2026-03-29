@@ -124,10 +124,10 @@ const HeatMap = ({
 
     // 设置基础配置
     const option = {
-      backgroundColor: 'transparent',
+      backgroundColor: '#0a0e17', // 深色科技风背景
       tooltip: {
         trigger: 'item',
-        backgroundColor: 'rgba(17, 24, 39, 0.95)',
+        backgroundColor: 'rgba(17, 24, 39, 0.98)',
         borderColor: '#374151',
         borderWidth: 1,
         textStyle: {
@@ -168,43 +168,64 @@ const HeatMap = ({
           breadcrumb: {
             show: false,
           },
-          label: {
-            show: true,
-            formatter: '{name}',
-            fontSize: 12,
-            color: '#fff',
-          },
+          // 行业分组标签（上层）
           upperLabel: {
             show: true,
-            height: 20,
-            color: '#9ca3af',
-            fontSize: 11,
+            height: 24,
+            color: '#e5e7eb',
+            fontSize: 12,
+            fontWeight: 'bold',
+            backgroundColor: 'rgba(30, 41, 59, 0.8)',
             formatter: (params) => {
-              return params.name;
+              return ` ${params.name}`;
+            },
+          },
+          // 股票标签（下层）
+          label: {
+            show: true,
+            fontSize: 10,
+            fontWeight: 'normal',
+            color: '#fff',
+            lineHeight: 13,
+            overflow: 'truncate',
+            formatter: (params) => {
+              const stock = params.data?.data;
+              if (!stock) return params.name;
+              const change = stock.changePercent || 0;
+              const sign = change > 0 ? '+' : '';
+              // 只显示4个字符的股票名称 + 涨跌幅，确保小方块也能显示
+              const shortName = params.name.length > 4 ? params.name.slice(0, 4) : params.name;
+              return `${shortName}\n${sign}${change.toFixed(2)}%`;
             },
           },
           itemStyle: {
-            borderColor: '#1f2937',
+            borderColor: '#0f172a',
             borderWidth: 1,
             gapWidth: 1,
-            borderRadius: 2,
+            borderRadius: 0,
           },
           levels: [
+            // 行业层级
             {
               itemStyle: {
-                borderColor: '#1f2937',
-                borderWidth: 2,
+                borderColor: '#1e293b',
+                borderWidth: 3,
                 gapWidth: 2,
               },
               upperLabel: {
                 show: true,
+                position: 'top',
               },
             },
+            // 股票层级
             {
               itemStyle: {
-                borderColor: '#1f2937',
+                borderColor: '#0f172a',
                 borderWidth: 1,
                 gapWidth: 1,
+              },
+              label: {
+                show: true,
               },
             },
           ],

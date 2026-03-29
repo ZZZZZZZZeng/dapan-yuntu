@@ -284,7 +284,7 @@ function App() {
   }, []);
 
   return (
-    <div className="h-screen flex flex-col bg-gray-800 text-white">
+    <div className="h-screen flex flex-col bg-gray-900 text-white">
       {/* 顶部指数栏 */}
       <IndexBar indexData={indexData} lastUpdateTime={lastUpdateTime} />
       
@@ -306,7 +306,7 @@ function App() {
         />
         
         {/* 热力图主区域 */}
-        <div id="heatmap-container" className="flex-1 relative bg-gray-900">
+        <div id="heatmap-container" className="flex-1 relative bg-[#0a0e17]">
           {/* 加载状态 */}
           {isLoading && (
             <div className="absolute inset-0 flex items-center justify-center bg-gray-900/80 z-50">

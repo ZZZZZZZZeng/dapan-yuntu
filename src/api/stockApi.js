@@ -307,17 +307,21 @@ export function classifyByMarketCap(stockData) {
   };
 }
 
-// 计算涨跌幅颜色 - 用于热力图
+// 计算涨跌幅颜色 - 用于热力图（专业级配色）
 export function getChangeColor(changePercent) {
-  if (changePercent > 5) return '#7f1d1d'; // 深红
-  if (changePercent > 3) return '#991b1b'; // 红
-  if (changePercent > 1) return '#dc2626'; // 浅红
-  if (changePercent > 0) return '#fca5a5'; // 淡红
-  if (changePercent === 0) return '#6b7280'; // 灰色
-  if (changePercent > -1) return '#86efac'; // 淡绿
-  if (changePercent > -3) return '#16a34a'; // 浅绿
-  if (changePercent > -5) return '#15803d'; // 绿
-  return '#14532d'; // 深绿
+  // 涨幅：从淡红到鲜红，幅度越大颜色越亮越饱和
+  if (changePercent >= 7) return '#ff0000'; // 涨停级鲜红色
+  if (changePercent >= 5) return '#ff2a2a'; 
+  if (changePercent >= 3) return '#ff4d4f';
+  if (changePercent >= 1) return '#ff7875';
+  if (changePercent > 0) return '#ffa39e';
+  if (changePercent === 0) return '#333333'; // 深灰色，更明显
+  // 跌幅：从淡绿到鲜绿，幅度越大颜色越亮越饱和
+  if (changePercent > -1) return '#86efac';
+  if (changePercent > -3) return '#36d399';
+  if (changePercent > -5) return '#00b42a';
+  if (changePercent > -7) return '#009e52';
+  return '#008000'; // 跌停级深绿色
 }
 
 // 导出API函数
