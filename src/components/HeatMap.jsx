@@ -27,7 +27,7 @@ const HeatMap = ({
     return brightness > 128 ? '#000000' : '#ffffff';
   }, []);
 
-  // 准备ECharts数据
+  // 准备ECharts数据 - 纯行业+个股两层结构
   const prepareChartData = useCallback(() => {
     if (!stockData || stockData.length === 0) {
       return [];
@@ -36,10 +36,13 @@ const HeatMap = ({
     // 按行业分组
     const sectorGroups = {};
     
-    // 初始化所有选中的行业
+    // 只保留真实的一级行业，过滤掉所有指数/策略类分组
+    const validSectors = Object.keys(sectors);
+    
+    // 初始化需要显示的行业
     const sectorsToShow = selectedSectors.length > 0 
-      ? selectedSectors 
-      : Object.keys(sectors);
+      ? selectedSectors.filter(s => validSectors.includes(s))
+      : validSectors;
     
     sectorsToShow.forEach(sectorCode => {
       const sectorInfo = sectors[sectorCode];
@@ -47,33 +50,30 @@ const HeatMap = ({
         sectorGroups[sectorCode] = {
           name: sectorInfo.name,
           code: sectorCode,
-          color: sectorInfo.color,
-          children: []
+          children: [],
+          // 板块统计数据
+          upCount: 0,
+          downCount: 0,
+          totalChange: 0,
         };
       }
     });
 
     // 将股票分配到行业
     stockData.forEach(stock => {
-      // 判断股票所属行业
-      let assignedSector = 'other';
+      const stockSector = getStockSector(stock.code);
+      const assignedSector = stockSector.code;
       
-      // 根据股票代码前缀和已知的行业分类判断
-      for (const [sectorCode, sectorInfo] of Object.entries(sectors)) {
-        // 这里简化处理，实际应该根据真实的行业分类数据
-        // 暂时使用getStockSector函数
-        const stockSector = getStockSector(stock.code);
-        if (stockSector.code === sectorCode) {
-          assignedSector = sectorCode;
-          break;
-        }
-      }
-      
-      // 如果该行业被选中，则添加股票
+      // 只处理有效的行业分组
       if (sectorGroups[assignedSector]) {
         const changePercent = stock.changePercent || 0;
         const bgColor = getChangeColor(changePercent);
         const textColor = getTextColor(bgColor);
+        
+        // 更新板块统计
+        if (changePercent > 0) sectorGroups[assignedSector].upCount++;
+        else if (changePercent < 0) sectorGroups[assignedSector].downCount++;
+        sectorGroups[assignedSector].totalChange += changePercent;
         
         sectorGroups[assignedSector].children.push({
           name: stock.stockName || stock.code,
@@ -84,14 +84,16 @@ const HeatMap = ({
           },
           label: {
             color: textColor,
-            fontSize: 11,
-            lineHeight: 14,
+            fontSize: 10,
+            lineHeight: 13,
+            overflow: 'truncate',
             formatter: (params) => {
               const stock = params.data?.data;
               if (!stock) return params.name;
               const change = stock.changePercent || 0;
               const sign = change > 0 ? '+' : '';
-              return `${params.name}\n${sign}${change.toFixed(2)}%`;
+              const shortName = params.name.length > 4 ? params.name.slice(0, 4) : params.name;
+              return `${shortName}\n${sign}${change.toFixed(2)}%`;
             },
           },
           data: stock,
@@ -99,18 +101,33 @@ const HeatMap = ({
       }
     });
 
-    // 转换为ECharts treemap需要的格式
+    // 转换为ECharts treemap需要的格式 - 只有行业和个股两层
     return Object.values(sectorGroups)
       .filter(group => group.children.length > 0)
-      .map(group => ({
-        name: group.name,
-        itemStyle: {
-          borderColor: '#1f2937',
-          borderWidth: 2,
-          gapWidth: 2,
-        },
-        children: group.children,
-      }));
+      .map(group => {
+        // 计算板块平均涨跌幅
+        const avgChange = group.children.length > 0 ? group.totalChange / group.children.length : 0;
+        const changeSign = avgChange > 0 ? '+' : '';
+        const changeColor = avgChange > 0 ? '#ff4d4f' : avgChange < 0 ? '#36d399' : '#9ca3af';
+        
+        return {
+          name: `${group.name} ${changeSign}${avgChange.toFixed(2)}% (${group.upCount}↑${group.downCount}↓)`,
+          itemStyle: {
+            borderColor: '#1e293b',
+            borderWidth: 3,
+            gapWidth: 2,
+          },
+          upperLabel: {
+            show: true,
+            height: 24,
+            color: changeColor,
+            fontSize: 12,
+            fontWeight: 'bold',
+            backgroundColor: 'rgba(30, 41, 59, 0.9)',
+          },
+          children: group.children,
+        };
+      });
   }, [stockData, selectedSectors, getChangeColor, getTextColor]);
 
   // 初始化ECharts

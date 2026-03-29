@@ -61,10 +61,11 @@ const Sidebar = ({
     <div className="w-56 bg-gray-800 border-r border-gray-700 flex flex-col overflow-y-auto text-sm">
       {/* 市场选择 */}
       <div className="p-2 border-b border-gray-700">
+        <div className="text-gray-400 mb-1 text-xs">市场筛选</div>
         {marketOptions.map(option => (
           <div 
             key={option.value}
-            className={`py-1 px-2 rounded cursor-pointer mb-1 ${
+            className={`py-1 px-2 rounded cursor-pointer mb-1 text-xs ${
               selectedMarket === option.value ? 'bg-blue-600 text-white' : 'hover:bg-gray-700'
             }`}
             onClick={() => onMarketChange(option.value)}
