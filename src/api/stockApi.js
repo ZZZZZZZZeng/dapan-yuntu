@@ -173,7 +173,7 @@ export async function fetchStockData(stockCodes, retries = 2) {
       try {
         const codesStr = batch.join(',');
         const timestamp = Date.now();
-        const url = `http://qt.gtimg.cn/q=${codesStr}?_=${timestamp}`;
+        const url = `https://qt.gtimg.cn/q=${codesStr}?_=${timestamp}`;
         
         const response = await fetch(url, {
           method: 'GET',
