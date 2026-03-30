@@ -307,21 +307,18 @@ export function classifyByMarketCap(stockData) {
   };
 }
 
-// 计算涨跌幅颜色 - 用于热力图（专业级配色，和底部色条完全对齐）
+// 计算涨跌幅颜色 - 完全对齐cloudmap大盘云图官方配色
 export function getChangeColor(changePercent) {
-  // 涨幅：从淡红到鲜红，幅度越大颜色越深越饱和
-  if (changePercent >= 4) return '#7f1d1d'; // +4%以上 深红
-  if (changePercent >= 3) return '#991b1b'; // +3-4% 红
-  if (changePercent >= 2) return '#b91c1c'; // +2-3% 中红
-  if (changePercent >= 1) return '#dc2626'; // +1-2% 浅红
-  if (changePercent > 0) return '#fca5a5'; // 0-1% 淡红
-  if (Math.abs(changePercent) < 0.05) return '#475569'; // 0% ±0.05% 浅灰色，和涨跌明显区分
-  // 跌幅：从淡绿到深绿，幅度越大颜色越深越饱和
-  if (changePercent > -1) return '#86efac'; // -1-0% 淡绿
-  if (changePercent > -2) return '#22c55e'; // -2--1% 浅绿
-  if (changePercent > -3) return '#16a34a'; // -3--2% 中绿
-  if (changePercent > -4) return '#15803d'; // -4--3% 绿
-  return '#14532d'; // -4%以下 深绿
+  // cloudmap配色方案：9阶配色，对应区间[-4%, -3%, -2%, -1%, 0%, 1%, 2%, 3%, 4%]
+  if (changePercent <= -4) return '#00d641'; // -4%以下 亮绿
+  if (changePercent <= -3) return '#1aa448'; // -4~-3% 深绿
+  if (changePercent <= -2) return '#0e6f2f'; // -3~-2% 暗绿
+  if (changePercent <= -1) return '#085421'; // -2~-1% 墨绿
+  if (Math.abs(changePercent) <= 0.1) return '#424453'; // -0.1~+0.1% 中性灰
+  if (changePercent <= 1) return '#6d1414'; // 0~1% 暗红
+  if (changePercent <= 2) return '#961010'; // 1~2% 红
+  if (changePercent <= 3) return '#be0808'; // 2~3% 亮红
+  return '#e41414'; // 3%以上 鲜红
 }
 
 // 导出API函数

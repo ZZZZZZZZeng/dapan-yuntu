@@ -85,18 +85,19 @@ const HeatMap = ({
             color: bgColor,
           },
           label: {
-            show: true, // 强制显示文字，即使色块很小
+            show: true,
             color: textColor,
-            fontSize: 8.5, // 缩小字号，小色块也能放下
-            lineHeight: 11, // 减小行高，两行文字更紧凑
-            overflow: 'break',
+            fontSize: 8, // 对齐cloudmap极小字号
+            lineHeight: 10,
+            overflow: 'truncate',
+            minVisibleValue: 500000000, // 市值小于5亿的小方块完全隐藏文字，避免拥挤
             formatter: (params) => {
               const stock = params.data?.data;
               if (!stock) return params.name;
               const change = stock.changePercent || 0;
               const sign = change > 0 ? '+' : '';
-              const shortName = params.name.length > 3 ? params.name.slice(0, 3) : params.name; // 最多3字，小色块更易放下
-              return `${shortName}\n${sign}${change.toFixed(1)}%`; // 涨跌幅保留1位小数，更短
+              const shortName = params.name.length > 3 ? params.name.slice(0, 3) : params.name; // 最多3字
+              return `${shortName}\n${sign}${change.toFixed(1)}%`;
             },
           },
           data: stock,
@@ -154,14 +155,16 @@ const HeatMap = ({
         bottom: 0,
         containLabel: true,
       },
-      // 动画配置：首次渲染有动画，更新时完全关闭动画，避免高频刷新闪烁
-      animation: true,
-      animationDuration: 300, // 首次渲染动画时长
-      animationDurationUpdate: 0, // 数据更新无动画，直接替换数值
-      animationEasing: 'cubicOut',
+      // 完全关闭所有动画，彻底避免任何闪烁
+      animation: false,
+      animationDuration: 0,
+      animationDurationUpdate: 0,
+      animationEasing: 'linear',
       animationEasingUpdate: 'linear',
-      animationThreshold: 1,
-      animationUpdate: false, // 完全关闭更新动画
+      animationThreshold: 99999,
+      animationUpdate: false,
+      progressive: 0, // 关闭渐进式渲染，一次性加载所有节点
+      progressiveThreshold: 99999,
       tooltip: {
         trigger: 'item',
         backgroundColor: 'rgba(17, 24, 39, 0.98)',
