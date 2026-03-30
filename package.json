@@ -2,7 +2,10 @@
   "name": "dapan-yuntu",
   "version": "1.0.0",
   "description": "A股股票热力图可视化网页，类似 dapanyuntu.com",
-  "main": "index.js",
+  "type": "module",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
