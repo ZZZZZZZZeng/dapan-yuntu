@@ -139,9 +139,11 @@ const HeatMap = ({
   useEffect(() => {
     if (!chartRef.current) return;
 
-    // 初始化图表
+    // 初始化图表 - 使用WebGL渲染器，大幅提升大量节点的渲染性能
     chartInstance.current = echarts.init(chartRef.current, 'dark', {
-      renderer: 'canvas',
+      renderer: 'webgl',
+      useDirtyRect: true, // 启用脏矩形渲染，仅重绘变化区域
+      devicePixelRatio: Math.min(window.devicePixelRatio, 2), // 限制分辨率，避免高DPI设备性能损耗
     });
 
     // 设置基础配置
@@ -155,16 +157,14 @@ const HeatMap = ({
         bottom: 0,
         containLabel: true,
       },
-      // 完全关闭所有动画，彻底避免任何闪烁
-      animation: false,
+      // 性能优化配置
+      animation: false, // 完全关闭动画，避免闪烁和性能损耗
       animationDuration: 0,
       animationDurationUpdate: 0,
-      animationEasing: 'linear',
-      animationEasingUpdate: 'linear',
-      animationThreshold: 99999,
-      animationUpdate: false,
-      progressive: 0, // 关闭渐进式渲染，一次性加载所有节点
-      progressiveThreshold: 99999,
+      progressive: 200, // 启用渐进式渲染，每批渲染200个节点，避免卡顿
+      progressiveThreshold: 1000, // 超过1000个节点时启用渐进式渲染
+      silent: true, // 静默模式，减少事件触发开销
+      useUTC: false, // 本地时区，减少时间计算开销
       tooltip: {
         trigger: 'item',
         backgroundColor: 'rgba(17, 24, 39, 0.98)',

@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import html2canvas from 'html2canvas';
+import React, { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from 'react';
+// 懒加载html2canvas，仅在需要截图时加载
+const html2canvas = lazy(() => import('html2canvas'));
 import Header from './components/Header';
 import Sidebar from './components/Sidebar';
 import HeatMap from './components/HeatMap';
@@ -296,11 +297,15 @@ function App() {
       const container = document.getElementById('heatmap-container');
       if (!container) return;
 
+      // 动态加载html2canvas
+      const { default: html2canvas } = await import('html2canvas');
+      
       // 生成截图
       const canvas = await html2canvas(container, {
         backgroundColor: '#0f172a',
         scale: 2, // 高清截图
         useCORS: true,
+        logging: false, // 关闭日志输出
       });
 
       // 转换为图片并下载

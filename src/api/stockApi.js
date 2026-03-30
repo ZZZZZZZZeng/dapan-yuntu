@@ -141,9 +141,9 @@ function parseStockData(dataStr) {
   };
 }
 
-// 简单缓存，缓存时间2秒
+// 简单缓存，缓存时间5秒（刷新间隔8秒，避免重复请求）
 const cache = new Map();
-const CACHE_TTL = 2000;
+const CACHE_TTL = 5000;
 
 // 批量获取股票数据 - 带重试和缓存
 export async function fetchStockData(stockCodes, retries = 2) {
@@ -151,8 +151,8 @@ export async function fetchStockData(stockCodes, retries = 2) {
     return [];
   }
   
-  // 分批处理，每批最多50只（降低限流风险）
-  const batchSize = 50;
+  // 分批处理，每批最多200只（腾讯API支持最大200/批，大幅减少请求次数）
+  const batchSize = 200;
   const results = [];
   
   for (let i = 0; i < stockCodes.length; i += batchSize) {
