@@ -107,11 +107,12 @@ function generateAllStockCodes() {
   const codes = [];
   
   // 沪市主板 600xxx, 601xxx, 603xxx, 605xxx
-  for (let i = 0; i < 6000; i++) {
-    const num = String(i).padStart(6, '0');
-    if (num.startsWith('600') || num.startsWith('601') || num.startsWith('603') || num.startsWith('605')) {
-      codes.push(`sh${num}`);
-    }
+  for (let i = 0; i < 1000; i++) {
+    const suffix = String(i).padStart(3, '0');
+    codes.push(`sh600${suffix}`);
+    codes.push(`sh601${suffix}`);
+    codes.push(`sh603${suffix}`);
+    codes.push(`sh605${suffix}`);
   }
   
   // 科创板 688xxx
@@ -121,26 +122,23 @@ function generateAllStockCodes() {
   
   // 深市主板 000xxx, 001xxx
   for (let i = 0; i < 1000; i++) {
-    const num = String(i).padStart(6, '0');
-    if (num.startsWith('000') || num.startsWith('001')) {
-      codes.push(`sz${num}`);
-    }
+    const suffix = String(i).padStart(3, '0');
+    codes.push(`sz000${suffix}`);
+    codes.push(`sz001${suffix}`);
   }
   
   // 深市中小板 002xxx, 003xxx
   for (let i = 0; i < 1000; i++) {
-    const num = String(i).padStart(6, '0');
-    if (num.startsWith('002') || num.startsWith('003')) {
-      codes.push(`sz${num}`);
-    }
+    const suffix = String(i).padStart(3, '0');
+    codes.push(`sz002${suffix}`);
+    codes.push(`sz003${suffix}`);
   }
   
   // 创业板 300xxx, 301xxx
   for (let i = 0; i < 1500; i++) {
-    const num = String(i).padStart(6, '0');
-    if (num.startsWith('300') || num.startsWith('301')) {
-      codes.push(`sz${num}`);
-    }
+    const suffix = String(i).padStart(3, '0');
+    codes.push(`sz300${suffix}`);
+    codes.push(`sz301${suffix}`);
   }
   
   // 去重并返回
