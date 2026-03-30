@@ -48,6 +48,7 @@ const HeatMap = ({
       const sectorInfo = sectors[sectorCode];
       if (sectorInfo) {
         sectorGroups[sectorCode] = {
+          id: sectorCode, // 唯一ID，让ECharts可识别节点复用
           name: sectorInfo.name,
           code: sectorCode,
           children: [],
@@ -76,8 +77,9 @@ const HeatMap = ({
         sectorGroups[assignedSector].totalChange += changePercent;
         
         sectorGroups[assignedSector].children.push({
+          id: stock.code, // 股票代码作为唯一ID，ECharts会复用节点
           name: stock.stockName || stock.code,
-          value: stock.circulationMarket || stock.totalMarket || 100, // 面积对应流通市值
+          value: stock.circulationMarket || stock.totalMarket || 100, // 面积对应流通市值（固定，不变）
           code: stock.code,
           itemStyle: {
             color: bgColor,
@@ -112,6 +114,7 @@ const HeatMap = ({
         const changeColor = avgChange > 0 ? '#ff4d4f' : avgChange < 0 ? '#36d399' : '#9ca3af';
         
         return {
+          id: group.code, // 唯一ID
           name: group.name, // 只显示纯行业名称，和52etf一致
           itemStyle: {
             borderColor: '#0f172a',
@@ -151,13 +154,14 @@ const HeatMap = ({
         bottom: 0,
         containLabel: true,
       },
-      // 平滑动画，避免更新闪烁
+      // 动画配置：首次渲染有动画，更新时完全关闭动画，避免高频刷新闪烁
       animation: true,
       animationDuration: 300, // 首次渲染动画时长
-      animationDurationUpdate: 80, // 数据更新动画极短，几乎无感知
+      animationDurationUpdate: 0, // 数据更新无动画，直接替换数值
       animationEasing: 'cubicOut',
-      animationEasingUpdate: 'linear', // 线性过渡更平滑
-      animationThreshold: 1, // 所有更新都启用动画
+      animationEasingUpdate: 'linear',
+      animationThreshold: 1,
+      animationUpdate: false, // 完全关闭更新动画
       tooltip: {
         trigger: 'item',
         backgroundColor: 'rgba(17, 24, 39, 0.98)',
@@ -318,8 +322,8 @@ const HeatMap = ({
 
     const chartData = prepareChartData();
     
-    // 请求动画帧时机更新，避免浏览器掉帧
-    requestAnimationFrame(() => {
+    // 微任务时机更新，确保所有UI渲染完成后再更新图表
+    queueMicrotask(() => {
       // 增量更新配置，避免全量重绘导致闪烁
       chartInstance.current?.setOption({
         series: [{
@@ -329,6 +333,7 @@ const HeatMap = ({
         notMerge: false, // 合并配置，不替换整个图表
         lazyUpdate: true, // 延迟更新，批量处理重绘
         silent: true, // 静默更新，不触发额外事件
+        replaceMerge: ['series'], // 只合并更新series部分，不重建整个图表实例
       });
     });
   }, [prepareChartData]);
