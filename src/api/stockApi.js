@@ -307,18 +307,28 @@ export function classifyByMarketCap(stockData) {
   };
 }
 
-// 计算涨跌幅颜色 - 完全对齐cloudmap大盘云图官方配色
+// 计算涨跌幅颜色 - 对齐东方财富大盘星图配色（使用十六进制）
 export function getChangeColor(changePercent) {
-  // cloudmap配色方案：9阶配色，对应区间[-4%, -3%, -2%, -1%, 0%, 1%, 2%, 3%, 4%]
-  if (changePercent <= -4) return '#00d641'; // -4%以下 亮绿
-  if (changePercent <= -3) return '#1aa448'; // -4~-3% 深绿
-  if (changePercent <= -2) return '#0e6f2f'; // -3~-2% 暗绿
-  if (changePercent <= -1) return '#085421'; // -2~-1% 墨绿
-  if (Math.abs(changePercent) <= 0.1) return '#424453'; // -0.1~+0.1% 中性灰
-  if (changePercent <= 1) return '#6d1414'; // 0~1% 暗红
-  if (changePercent <= 2) return '#961010'; // 1~2% 红
-  if (changePercent <= 3) return '#be0808'; // 2~3% 亮红
-  return '#e41414'; // 3%以上 鲜红
+  const pct = Math.max(-10, Math.min(10, changePercent));
+  
+  // 绿色系（下跌）- 从深绿到淡绿
+  if (pct <= -7) return '#003300';   // 跌停附近
+  if (pct <= -5) return '#004400';
+  if (pct <= -3) return '#006600';
+  if (pct <= -2) return '#008800';
+  if (pct <= -1) return '#00aa00';
+  if (pct < 0)   return '#00cc00';   // 轻微下跌
+  
+  // 红色系（上涨）
+  if (pct > 7)   return '#ff0000';   // 涨停附近
+  if (pct > 5)   return '#dd0000';
+  if (pct > 3)   return '#bb0000';
+  if (pct > 2)   return '#990000';
+  if (pct > 1)   return '#770000';
+  if (pct > 0)   return '#550000';   // 轻微上涨
+  
+  // 平盘 - 深灰色
+  return '#333333';
 }
 
 // 导出API函数
