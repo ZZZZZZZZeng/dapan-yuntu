@@ -20,7 +20,7 @@ const IndexBar = ({ indexData, lastUpdateTime, isRefreshing, onRefresh, onToggle
   return (
     <div className="bg-gray-700 py-1 px-4 flex items-center justify-between text-sm">
       <div className="flex items-center space-x-6">
-        <div className="font-bold text-white mr-2">大盘云图 <span className="text-xs bg-blue-500 px-1 rounded">v824</span></div>
+        <div className="font-bold text-white mr-2">大盘云图 <span className="text-xs bg-blue-500 px-1 rounded">v917</span></div>
         {coreIndices.map(index => {
           const data = indexData[index.code];
           const change = data?.changePercent || 0;
