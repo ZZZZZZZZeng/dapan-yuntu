@@ -102,11 +102,20 @@ function App() {
       
       // 新数据准备完成后才替换，没有空白期
       if (dataWithSector && dataWithSector.length > 0) {
-        // 新数据有效，更新缓存和状态
-        lastValidStockData.current = dataWithSector;
-        setStockData(dataWithSector);
-        setLastUpdateTime(new Date());
-        setMarketStats(calculateMarketStats(dataWithSector));
+        // 数据对比：只有和上一次数据真的不一样才更新，避免无意义重绘
+        const dataChanged = JSON.stringify(dataWithSector.map(s => ({ code: s.code, price: s.price, changePercent: s.changePercent }))) 
+          !== JSON.stringify(lastValidStockData.current.map(s => ({ code: s.code, price: s.price, changePercent: s.changePercent })));
+        
+        if (dataChanged || lastValidStockData.current.length === 0) {
+          // 新数据有效且有变化，更新缓存和状态
+          lastValidStockData.current = dataWithSector;
+          setStockData(dataWithSector);
+          setLastUpdateTime(new Date());
+          setMarketStats(calculateMarketStats(dataWithSector));
+          console.log('[App] 股票数据有变化，更新状态');
+        } else {
+          console.log('[App] 股票数据无变化，跳过更新，避免闪烁');
+        }
       } else {
         // 新数据无效，保留上一次的有效数据，不更新，完全避免黑屏
         console.warn('新数据为空，保留上一次有效数据');
@@ -143,6 +152,8 @@ function App() {
     }
   }, []);
 
+  // 缓存上一次过滤结果，避免无意义的重渲染
+  const lastFilteredDataRef = useRef([]);
   // 过滤数据 - 使用useMemo缓存结果，避免重复计算
   const filteredData = useMemo(() => {
     let filtered = [...stockData];
@@ -201,7 +212,19 @@ function App() {
       });
     }
     
-    return filtered;
+    // 对比过滤结果，只有真的变化了才返回新数组，否则返回旧的引用
+    const newFiltered = filtered;
+    const filteredChanged = JSON.stringify(newFiltered.map(s => ({ code: s.code, change: s.changePercent })))
+      !== JSON.stringify(lastFilteredDataRef.current.map(s => ({ code: s.code, change: s.changePercent })));
+    
+    if (filteredChanged || lastFilteredDataRef.current.length === 0) {
+      lastFilteredDataRef.current = newFiltered;
+      console.log('[App] 过滤后数据有变化，返回新结果');
+      return newFiltered;
+    } else {
+      console.log('[App] 过滤后数据无变化，返回缓存结果，避免重绘');
+      return lastFilteredDataRef.current;
+    }
   }, [stockData, selectedSectors, selectedIndex, filterRange, selectedMarket]);
 
   // 双击股票显示K线
