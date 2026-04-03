@@ -1,5 +1,5 @@
 // 腾讯财经API - A股实时行情数据获取
-// API地址：http://qt.gtimg.cn/q=sh600000,sz000001
+// API地址：https://qt.gtimg.cn/q=sh600000,sz000001
 
 // GBK解码器 - 用于处理腾讯API返回的GBK编码数据
 class GBKDecoder {
