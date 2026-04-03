@@ -76,14 +76,21 @@ const HeatMap = ({ data, loading, isPaused, onStockClick, error, lastUpdateTime,
 
   // 更新图表配置 - 核心优化：避免 clear()，使用渐进式更新
   const updateChart = useCallback(() => {
-    if (!chartInstance.current || chartData.length === 0 || isUpdating.current) return;
+    console.log('[HeatMap] 开始执行updateChart', { hasInstance: !!chartInstance.current, dataLength: chartData.length, isUpdating: isUpdating.current });
+    if (!chartInstance.current || chartData.length === 0 || isUpdating.current) {
+      console.warn('[HeatMap] updateChart跳过执行', { reason: !chartInstance.current ? '无实例' : chartData.length === 0 ? '无数据' : '正在更新中' });
+      return;
+    }
 
     isUpdating.current = true;
+    console.log('[HeatMap] 加锁，开始批量更新');
 
     scheduleUpdate(() => {
+      console.log('[HeatMap] requestAnimationFrame回调，开始渲染');
       try {
         const container = chartRef.current;
         if (!container) {
+          console.warn('[HeatMap] 容器不存在，终止更新');
           isUpdating.current = false;
           return;
         }
@@ -229,27 +236,37 @@ const HeatMap = ({ data, loading, isPaused, onStockClick, error, lastUpdateTime,
           silent: true      // 静默更新，不触发事件
         });
         
+        console.log('[HeatMap] 配置设置完成，开始渲染');
         // 标记图表已准备好
-        setIsChartReady(true);
+        setIsChartReady(prev => {
+          if (!prev) console.log('[HeatMap] 图表首次准备完成，isChartReady=true');
+          return true;
+        });
         
       } catch (err) {
-        console.error('Chart update error:', err);
+        console.error('[HeatMap] 图表更新失败:', err);
       } finally {
         isUpdating.current = false;
+        console.log('[HeatMap] 更新完成，解锁');
       }
     });
   }, [chartData, scheduleUpdate]);
 
   // 监听数据变化，更新图表 - 添加防抖避免频繁更新
   useEffect(() => {
+    console.log('[HeatMap] 数据变化触发更新', { chartDataLength: chartData.length, hasInstance: !!chartInstance.current, loading });
     if (chartData.length > 0 && chartInstance.current) {
+      console.log('[HeatMap] 启动防抖更新，延迟50ms');
       // 使用防抖避免频繁更新导致的闪烁
       if (debounceTimer.current) {
         clearTimeout(debounceTimer.current);
       }
       debounceTimer.current = setTimeout(() => {
+        console.log('[HeatMap] 防抖到期，执行updateChart');
         updateChart();
       }, 50); // 50ms 防抖延迟
+    } else if (chartData.length === 0) {
+      console.warn('[HeatMap] 图表数据为空，跳过更新');
     }
     
     return () => {
@@ -257,16 +274,19 @@ const HeatMap = ({ data, loading, isPaused, onStockClick, error, lastUpdateTime,
         clearTimeout(debounceTimer.current);
       }
     };
-  }, [chartData, updateChart]);
+  }, [chartData, updateChart, loading]);
 
   // 初始化 - 移除 setTimeout 延迟，使用同步初始化
   useEffect(() => {
+    console.log('[HeatMap] 开始初始化图表', { container: !!chartRef.current, existingInstance: !!chartInstance.current });
     // 同步初始化，避免延迟导致的黑屏
     if (chartRef.current && !chartInstance.current) {
       try {
+        console.log('[HeatMap] 创建ECharts实例');
         chartInstance.current = echarts.init(chartRef.current, 'dark', {
           renderer: 'canvas'
         });
+        console.log('[HeatMap] ECharts实例创建成功');
         
         // 绑定点击事件
         chartInstance.current.on('click', (params) => {
@@ -276,13 +296,15 @@ const HeatMap = ({ data, loading, isPaused, onStockClick, error, lastUpdateTime,
         });
         
         // 初始空图表，避免黑屏
+        console.log('[HeatMap] 设置初始空配置');
         chartInstance.current.setOption({
           backgroundColor: 'transparent',
           series: []
         }, { silent: true });
+        console.log('[HeatMap] 初始化完成');
         
       } catch (err) {
-        console.error('Chart init error:', err);
+        console.error('[HeatMap] 图表初始化失败:', err);
       }
     }
   }, [onStockClick]);
