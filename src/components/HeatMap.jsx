@@ -1,412 +1,361 @@
-import React, { useEffect, useRef, useState, useCallback, memo } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import * as echarts from 'echarts';
-import { sectors, getStockSector } from '../data/stockCodes';
-import { getChangeColor } from '../api/stockApi';
+import { calculateMarketValue } from '../api/stockApi';
+import '../styles/HeatMap.css';
 
-const HeatMap = ({ 
-  stockData, 
-  selectedSectors,
-  selectedIndex,
-  filterRange,
-  onStockClick,
-  onDrillDown,
-  isReviewMode = false,
-}) => {
+const HeatMap = ({ data, loading, isPaused, onStockClick, error, lastUpdateTime, selectedIndustry, selectedMarket, marketValueRange, changePercentRange }) => {
   const chartRef = useRef(null);
   const chartInstance = useRef(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [hoveredStock, setHoveredStock] = useState(null);
+  const [chartData, setChartData] = useState([]);
+  const [isChartReady, setIsChartReady] = useState(false);
+  const resizeObserver = useRef(null);
+  const rafId = useRef(null);
+  const debounceTimer = useRef(null);
+  const isUpdating = useRef(false);
 
-  // 获取文字颜色（根据背景色亮度决定黑白）
-  const getTextColor = useCallback((bgColor) => {
-    // 简单的亮度计算
-    const r = parseInt(bgColor.slice(1, 3), 16);
-    const g = parseInt(bgColor.slice(3, 5), 16);
-    const b = parseInt(bgColor.slice(5, 7), 16);
-    const brightness = (r * 299 + g * 587 + b * 114) / 1000;
-    return brightness > 128 ? '#000000' : '#ffffff';
+  // 使用 requestAnimationFrame 批量处理更新
+  const scheduleUpdate = useCallback((updateFn) => {
+    if (rafId.current) {
+      cancelAnimationFrame(rafId.current);
+    }
+    rafId.current = requestAnimationFrame(() => {
+      updateFn();
+      rafId.current = null;
+    });
   }, []);
 
-  // 准备ECharts数据 - 纯行业+个股两层结构
-  const prepareChartData = useCallback(() => {
-    if (!stockData || stockData.length === 0) {
-      return [];
+  // 防抖处理 resize
+  const debouncedResize = useCallback(() => {
+    if (debounceTimer.current) {
+      clearTimeout(debounceTimer.current);
     }
-
-    // 按行业分组
-    const sectorGroups = {};
-    
-    // 只保留真实的一级行业，过滤掉所有指数/策略类分组
-    const validSectors = Object.keys(sectors);
-    
-    // 初始化需要显示的行业
-    const sectorsToShow = selectedSectors.length > 0 
-      ? selectedSectors.filter(s => validSectors.includes(s))
-      : validSectors;
-    
-    sectorsToShow.forEach(sectorCode => {
-      const sectorInfo = sectors[sectorCode];
-      if (sectorInfo) {
-        sectorGroups[sectorCode] = {
-          id: sectorCode, // 唯一ID，让ECharts可识别节点复用
-          name: sectorInfo.name,
-          code: sectorCode,
-          children: [],
-          // 板块统计数据
-          upCount: 0,
-          downCount: 0,
-          totalChange: 0,
-        };
+    debounceTimer.current = setTimeout(() => {
+      if (chartInstance.current) {
+        chartInstance.current.resize();
       }
-    });
+    }, 100);
+  }, []);
 
-    // 将股票分配到行业
-    stockData.forEach(stock => {
-      const stockSector = getStockSector(stock.code);
-      const assignedSector = stockSector.code;
-      
-      // 只处理有效的行业分组
-      if (sectorGroups[assignedSector]) {
-        const changePercent = stock.changePercent || 0;
-        const bgColor = getChangeColor(changePercent);
-        const textColor = getTextColor(bgColor);
+  // 预处理数据，使用 useMemo 避免重复计算
+  const processedData = useMemo(() => {
+    if (!data || data.length === 0) return [];
+    
+    return data.map(stock => {
+      const marketValue = calculateMarketValue(stock.totalCapital, stock.price);
+      return {
+        name: stock.name,
+        code: stock.code,
+        value: stock.price,
+        change: stock.changePercent,
+        industry: stock.industry,
+        market: stock.market,
+        marketValue: marketValue,
+        itemStyle: {
+          borderRadius: 4,
+          borderWidth: 1,
+          borderColor: 'rgba(255, 255, 255, 0.1)'
+        }
+      };
+    });
+  }, [data]);
+
+  // 同步 processedData 到 chartData
+  useEffect(() => {
+    setChartData(processedData);
+  }, [processedData]);
+
+  // 更新图表配置 - 核心优化：避免 clear()，使用渐进式更新
+  const updateChart = useCallback(() => {
+    if (!chartInstance.current || chartData.length === 0 || isUpdating.current) return;
+
+    isUpdating.current = true;
+
+    scheduleUpdate(() => {
+      try {
+        const container = chartRef.current;
+        if (!container) {
+          isUpdating.current = false;
+          return;
+        }
+
+        const containerWidth = container.clientWidth;
+        const containerHeight = container.clientHeight;
         
-        // 更新板块统计
-        if (changePercent > 0) sectorGroups[assignedSector].upCount++;
-        else if (changePercent < 0) sectorGroups[assignedSector].downCount++;
-        sectorGroups[assignedSector].totalChange += changePercent;
+        // 计算最优布局参数
+        const dataCount = chartData.length;
         
-        sectorGroups[assignedSector].children.push({
-          id: stock.code, // 股票代码作为唯一ID，ECharts会复用节点
-          name: stock.stockName || stock.code,
-          value: stock.circulationMarket || stock.totalMarket || 100, // 面积对应流通市值（固定，不变）
-          code: stock.code,
-          itemStyle: {
-            color: bgColor,
-          },
-          label: {
-            show: true,
-            color: textColor,
-            fontSize: 8, // 对齐cloudmap极小字号
-            lineHeight: 10,
-            overflow: 'truncate',
-            minVisibleValue: 500000000, // 市值小于5亿的小方块完全隐藏文字，避免拥挤
-            formatter: (params) => {
-              const stock = params.data?.data;
-              if (!stock) return params.name;
-              const change = stock.changePercent || 0;
-              const sign = change > 0 ? '+' : '';
-              const shortName = params.name.length > 3 ? params.name.slice(0, 3) : params.name; // 最多3字
-              return `${shortName}\n${sign}${change.toFixed(1)}%`;
+        // 根据容器比例和数据量动态计算矩形比例
+        const containerRatio = containerWidth / containerHeight;
+        const idealItemRatio = Math.sqrt(containerRatio);
+        
+        // 计算网格布局
+        const cols = Math.ceil(Math.sqrt(dataCount * idealItemRatio));
+        const rows = Math.ceil(dataCount / cols);
+        
+        // 计算矩形大小和间距
+        const gap = 2;
+        const cellWidth = (containerWidth - gap * (cols - 1)) / cols;
+        const cellHeight = (containerHeight - gap * (rows - 1)) / rows;
+        
+        // 计算实际矩形大小（考虑间距）
+        const rectWidth = Math.max(10, cellWidth - 1);
+        const rectHeight = Math.max(10, cellHeight - 1);
+
+        const option = {
+          backgroundColor: 'transparent',
+          tooltip: {
+            trigger: 'item',
+            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+            borderColor: '#333',
+            textStyle: {
+              color: '#fff',
+              fontSize: 12
             },
+            formatter: function(params) {
+              const data = params.data;
+              const changeStr = data.change > 0 ? `+${data.change.toFixed(2)}` : data.change.toFixed(2);
+              const changeColor = data.change > 0 ? '#ff6b6b' : data.change < 0 ? '#4ecdc4' : '#fff';
+              return `
+                <div style="padding: 8px;">
+                  <div style="font-weight: bold; font-size: 14px; margin-bottom: 4px;">${data.name}</div>
+                  <div style="color: #aaa; font-size: 11px; margin-bottom: 4px;">${data.code}</div>
+                  <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span>价格: ¥${data.value.toFixed(2)}</span>
+                    <span style="color: ${changeColor}; font-weight: bold;">${changeStr}%</span>
+                  </div>
+                  <div style="margin-top: 4px; color: #888; font-size: 11px;">市值: ${data.marketValue}</div>
+                </div>
+              `;
+            }
           },
-          data: stock,
+          series: [{
+            type: 'custom',
+            renderItem: function(params, api) {
+              const dataIndex = params.dataIndex;
+              const data = chartData[dataIndex];
+              
+              // 计算位置（从左到右，从上到下）
+              const col = dataIndex % cols;
+              const row = Math.floor(dataIndex / cols);
+              
+              const x = col * (cellWidth + gap);
+              const y = row * (cellHeight + gap);
+              
+              // 根据涨跌幅计算颜色
+              let color;
+              if (data.change > 0) {
+                const intensity = Math.min(Math.abs(data.change) / 5, 1);
+                color = `rgba(255, 107, 107, ${0.3 + intensity * 0.7})`;
+              } else if (data.change < 0) {
+                const intensity = Math.min(Math.abs(data.change) / 5, 1);
+                color = `rgba(78, 205, 196, ${0.3 + intensity * 0.7})`;
+              } else {
+                color = 'rgba(128, 128, 128, 0.5)';
+              }
+              
+              return {
+                type: 'group',
+                children: [
+                  {
+                    type: 'rect',
+                    shape: {
+                      x: x,
+                      y: y,
+                      width: rectWidth,
+                      height: rectHeight,
+                      r: 4
+                    },
+                    style: {
+                      fill: color,
+                      stroke: 'rgba(255, 255, 255, 0.1)',
+                      lineWidth: 1
+                    }
+                  },
+                  ...(rectWidth > 40 && rectHeight > 20 ? [
+                    {
+                      type: 'text',
+                      style: {
+                        text: data.name,
+                        x: x + rectWidth / 2,
+                        y: y + rectHeight / 2 - 6,
+                        fill: '#fff',
+                        fontSize: Math.min(12, rectWidth / 6),
+                        textAlign: 'center',
+                        textVerticalAlign: 'middle',
+                        fontWeight: 'bold'
+                      }
+                    },
+                    {
+                      type: 'text',
+                      style: {
+                        text: `${data.change > 0 ? '+' : ''}${data.change.toFixed(2)}%`,
+                        x: x + rectWidth / 2,
+                        y: y + rectHeight / 2 + 8,
+                        fill: data.change > 0 ? '#ffcccc' : data.change < 0 ? '#ccffff' : '#cccccc',
+                        fontSize: Math.min(10, rectWidth / 7),
+                        textAlign: 'center',
+                        textVerticalAlign: 'middle'
+                      }
+                    }
+                  ] : [])
+                ]
+              };
+            },
+            data: chartData
+          }]
+        };
+
+        // 关键优化：使用 notMerge: false 进行渐进式更新，避免 clear() 导致的闪烁
+        // 仅在第一次初始化或数据维度变化时执行 clear
+        const shouldClear = !chartInstance.current.getOption().series;
+        
+        if (shouldClear) {
+          chartInstance.current.clear();
+        }
+        
+        chartInstance.current.setOption(option, { 
+          notMerge: shouldClear,  // 渐进式更新，避免闪烁
+          lazyUpdate: false,
+          silent: false
         });
+        
+        // 标记图表已准备好
+        setIsChartReady(true);
+        
+      } catch (err) {
+        console.error('Chart update error:', err);
+      } finally {
+        isUpdating.current = false;
       }
     });
+  }, [chartData, scheduleUpdate]);
 
-    // 转换为ECharts treemap需要的格式 - 只有行业和个股两层
-    return Object.values(sectorGroups)
-      .filter(group => group.children.length > 0)
-      .map(group => {
-        // 计算板块平均涨跌幅
-        const avgChange = group.children.length > 0 ? group.totalChange / group.children.length : 0;
-        const changeSign = avgChange > 0 ? '+' : '';
-        const changeColor = avgChange > 0 ? '#ff4d4f' : avgChange < 0 ? '#36d399' : '#9ca3af';
+  // 监听数据变化，更新图表 - 添加防抖避免频繁更新
+  useEffect(() => {
+    if (chartData.length > 0 && chartInstance.current) {
+      // 使用防抖避免频繁更新导致的闪烁
+      if (debounceTimer.current) {
+        clearTimeout(debounceTimer.current);
+      }
+      debounceTimer.current = setTimeout(() => {
+        updateChart();
+      }, 50); // 50ms 防抖延迟
+    }
+    
+    return () => {
+      if (debounceTimer.current) {
+        clearTimeout(debounceTimer.current);
+      }
+    };
+  }, [chartData, updateChart]);
+
+  // 初始化 - 移除 setTimeout 延迟，使用同步初始化
+  useEffect(() => {
+    // 同步初始化，避免延迟导致的黑屏
+    if (chartRef.current && !chartInstance.current) {
+      try {
+        chartInstance.current = echarts.init(chartRef.current, 'dark', {
+          renderer: 'canvas'
+        });
         
-        return {
-          id: group.code, // 唯一ID
-          name: group.name, // 只显示纯行业名称，和52etf一致
-          itemStyle: {
-            borderColor: '#0f172a',
-            borderWidth: 4, // 行业区域边框更粗更明显
-            gapWidth: 2,
-          },
-          upperLabel: {
-            show: true,
-            height: 24,
-            color: '#e5e7eb',
-            fontSize: 12,
-            fontWeight: 'bold',
-            backgroundColor: 'rgba(30, 41, 59, 0.9)',
-          },
-          children: group.children,
-        };
-      });
-  }, [stockData, selectedSectors, getChangeColor, getTextColor]);
+        // 绑定点击事件
+        chartInstance.current.on('click', (params) => {
+          if (params.data && onStockClick) {
+            onStockClick(params.data.code);
+          }
+        });
+        
+        // 初始空图表，避免黑屏
+        chartInstance.current.setOption({
+          backgroundColor: 'transparent',
+          series: []
+        }, { silent: true });
+        
+      } catch (err) {
+        console.error('Chart init error:', err);
+      }
+    }
+  }, [onStockClick]);
 
-  // 初始化ECharts
+  // 监听窗口大小变化 - 使用 ResizeObserver 和防抖
   useEffect(() => {
     if (!chartRef.current) return;
 
-    // 初始化图表 - 使用WebGL渲染器，大幅提升大量节点的渲染性能
-    chartInstance.current = echarts.init(chartRef.current, 'dark', {
-      renderer: 'canvas', // 降级为Canvas渲染，避免WebGL兼容性问题
-      useDirtyRect: true, // 启用脏矩形渲染，仅重绘变化区域
-      devicePixelRatio: Math.min(window.devicePixelRatio, 1.5), // 降低分辨率，提升性能
+    resizeObserver.current = new ResizeObserver(() => {
+      debouncedResize();
     });
 
-    // 设置基础配置
-    const option = {
-      backgroundColor: '#0a0e17', // 深色科技风背景
-      // 让图表完全填充容器，不留边缘空白
-      grid: {
-        left: 0,
-        right: 0,
-        top: 0,
-        bottom: 0,
-        containLabel: true,
-      },
-      // 性能优化配置：平衡流畅度和无黑屏
-      animation: false, // 全局强制关闭所有动画
-      animationDuration: 0,
-      animationDurationUpdate: 0,
-      animationEasing: 'linear',
-      animationEasingUpdate: 'linear',
-      animationThreshold: 99999, // 永远不触发动画
-      progressive: 300, // 每批渲染300个节点，平衡速度和流畅度
-      progressiveThreshold: 800, // 超过800节点启用渐进式
-      progressiveChunkMode: 'sequential', // 顺序渲染，从上到下逐批显示
-      useUTC: false,
-      hoverLayerThreshold: 99999,
-      stateAnimation: { duration: 0 }, // 关闭状态动画
-      transitionDuration: 0, // 关闭所有过渡
-      blendMode: 'source-over', // 直接覆盖绘制
-      emphasis: { focus: 'none' }, // 关闭高亮动画
-      tooltip: {
-        trigger: 'item',
-        backgroundColor: 'rgba(17, 24, 39, 0.98)',
-        borderColor: '#374151',
-        borderWidth: 1,
-        textStyle: {
-          color: '#f3f4f6',
-        },
-        formatter: (params) => {
-          const data = params.data?.data;
-          if (!data) return params.name;
-          
-          const changePercent = data.changePercent || 0;
-          const changeColor = changePercent > 0 ? '#ef4444' : changePercent < 0 ? '#22c55e' : '#9ca3af';
-          const changeSign = changePercent > 0 ? '+' : '';
-          
-          return `
-            <div style="padding: 8px;">
-              <div style="font-weight: bold; font-size: 14px; margin-bottom: 8px;">${data.stockName || data.code}</div>
-              <div style="display: grid; grid-template-columns: auto auto; gap: 8px 16px; font-size: 12px;">
-                <span style="color: #9ca3af;">代码:</span>
-                <span>${data.code}</span>
-                <span style="color: #9ca3af;">价格:</span>
-                <span style="font-weight: bold;">¥${data.price?.toFixed(2) || '--'}</span>
-                <span style="color: #9ca3af;">涨跌:</span>
-                <span style="color: ${changeColor}; font-weight: bold;">${changeSign}${changePercent.toFixed(2)}%</span>
-                <span style="color: #9ca3af;">市值:</span>
-                <span>${data.totalMarket ? (data.totalMarket / 100000000).toFixed(2) + '亿' : '--'}</span>
-              </div>
-            </div>
-          `;
-        },
-      },
-      series: [
-        {
-          type: 'treemap',
-          width: '100%',
-          height: '100%',
-          left: 'center',
-          top: 'center',
-          roam: false,
-          nodeClick: false,
-          animation: false, // 系列级强制关闭所有动画
-          animationDuration: 0,
-          animationDurationUpdate: 0,
-          hoverAnimation: false, // 关闭悬浮动画
-          squareRatio: 1, // 固定正方形比例，避免重排
-          breadcrumb: {
-            show: false,
-          },
-          // 行业分组标签（上层）
-          upperLabel: {
-            show: true,
-            height: 24,
-            color: '#e5e7eb',
-            fontSize: 12,
-            fontWeight: 'bold',
-            backgroundColor: 'rgba(30, 41, 59, 0.8)',
-            formatter: (params) => {
-              return ` ${params.name}`;
-            },
-          },
-
-          // 股票标签（下层）
-          label: {
-            show: true,
-            fontSize: 10,
-            fontWeight: 'normal',
-            color: '#fff',
-            lineHeight: 13,
-            overflow: 'truncate',
-            formatter: (params) => {
-              const stock = params.data?.data;
-              if (!stock) return params.name;
-              const change = stock.changePercent || 0;
-              const sign = change > 0 ? '+' : '';
-              // 只显示4个字符的股票名称 + 涨跌幅，确保小方块也能显示
-              const shortName = params.name.length > 4 ? params.name.slice(0, 4) : params.name;
-              return `${shortName}\n${sign}${change.toFixed(2)}%`;
-            },
-          },
-          itemStyle: {
-            borderColor: '#0f172a',
-            borderWidth: 1,
-            gapWidth: 1,
-            borderRadius: 0,
-          },
-          levels: [
-            // 行业层级
-            {
-              itemStyle: {
-                borderColor: '#1e293b',
-                borderWidth: 3,
-                gapWidth: 2,
-              },
-              upperLabel: {
-                show: true,
-                position: 'top',
-              },
-            },
-            // 股票层级
-            {
-              itemStyle: {
-                borderColor: '#1e293b',
-                borderWidth: 1,
-                gapWidth: 0, // 个股之间无间隙，排列更紧凑
-              },
-              label: {
-                show: true,
-              },
-            },
-          ],
-          data: [],
-        },
-      ],
-    };
-
-    chartInstance.current.setOption(option);
-
-    // 点击事件
-    chartInstance.current.on('click', (params) => {
-      if (params.data?.data) {
-        onStockClick?.(params.data.data);
-      }
-    });
-
-    // 双击事件
-    chartInstance.current.on('dblclick', (params) => {
-      if (params.data?.data) {
-        onDrillDown?.(params.data.data);
-      }
-    });
-
-    // 鼠标悬浮事件
-    chartInstance.current.on('mouseover', (params) => {
-      if (params.data?.data) {
-        setHoveredStock(params.data.data);
-      }
-    });
-
-    // 鼠标移出事件
-    chartInstance.current.on('mouseout', () => {
-      setHoveredStock(null);
-    });
-
-    // 响应式
-    const handleResize = () => {
-      chartInstance.current?.resize();
-    };
-
-    window.addEventListener('resize', handleResize);
+    resizeObserver.current.observe(chartRef.current);
 
     return () => {
-      window.removeEventListener('resize', handleResize);
-      chartInstance.current?.dispose();
-      chartInstance.current = null;
+      if (resizeObserver.current) {
+        resizeObserver.current.disconnect();
+        resizeObserver.current = null;
+      }
+      if (debounceTimer.current) {
+        clearTimeout(debounceTimer.current);
+      }
     };
-  }, [onStockClick, onDrillDown]);
+  }, [debouncedResize]);
 
-  // 更新图表数据
+  // 清理
   useEffect(() => {
-    if (!chartInstance.current || !stockData || stockData.length === 0) return;
+    return () => {
+      if (rafId.current) {
+        cancelAnimationFrame(rafId.current);
+      }
+      if (debounceTimer.current) {
+        clearTimeout(debounceTimer.current);
+      }
+      if (chartInstance.current) {
+        try {
+          chartInstance.current.dispose();
+        } catch (e) {
+          console.warn('Chart dispose error:', e);
+        }
+        chartInstance.current = null;
+      }
+    };
+  }, []);
 
-    const chartData = prepareChartData();
-    
-    // 微任务时机更新，确保所有UI渲染完成后再更新图表
-    queueMicrotask(() => {
-      // 增量更新配置，避免全量重绘
-      chartInstance.current?.setOption({
-        series: [{
-          data: chartData,
-        }],
-      }, {
-        notMerge: false, // 合并配置，不替换整个图表
-        lazyUpdate: true, // 批量更新，避免阻塞主线程
-        silent: true, // 静默更新，不触发额外事件
-      });
-    });
-  }, [prepareChartData, stockData]);
+  // 渲染 - 优化：避免不必要的 loading 状态，优先展示图表
+  if (error) {
+    return (
+      <div className="heatmap-container">
+        <div className="heatmap-error">
+          <p>加载失败: {error}</p>
+          <button onClick={() => window.location.reload()}>重试</button>
+        </div>
+      </div>
+    );
+  }
 
+  // 关键优化：即使 loading 也为 true，也渲染图表容器，避免黑屏
+  // 使用 CSS 控制 loading 层的显示，而不是完全隐藏容器
   return (
-    // 强制不透明，绝对不会有半透明效果
-    <div className="relative w-full h-full p-1 bg-[#0a0e17] opacity-1" style={{ opacity: 1 }}>
-      <div ref={chartRef} className="w-full h-full bg-[#0a0e17] opacity-1" style={{ opacity: 1 }} />
-
-      {/* 复盘模式覆盖层 */}
-      {isReviewMode && (
-        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-yellow-600/90 text-white px-6 py-3 rounded-lg shadow-lg">
-          <div className="flex items-center space-x-3">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <span className="font-medium">复盘模式</span>
-            <span className="text-yellow-200">使用 ← → 方向键浏览历史</span>
-            <span className="text-yellow-200 text-sm">| 按 ESC 退出</span>
-          </div>
+    <div className="heatmap-wrapper">
+      <div 
+        ref={chartRef} 
+        className="heatmap-container"
+        style={{ 
+          width: '100%', 
+          height: '100%',
+          visibility: loading ? 'hidden' : 'visible' // 隐藏但占位，避免布局抖动
+        }}
+      />
+      {(loading || !isChartReady) && (
+        <div className="heatmap-loading-overlay">
+          <div className="loading-spinner"></div>
+          <p>正在加载...</p>
         </div>
       )}
-
-      {/* 悬浮股票信息 */}
-      {hoveredStock && (
-        <div className="absolute bottom-4 right-4 bg-gray-800/95 border border-gray-700 rounded-lg p-4 shadow-xl max-w-xs">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-lg font-bold text-white">{hoveredStock.stockName}</span>
-            <span className="text-xs text-gray-400">{hoveredStock.code}</span>
-          </div>
-          <div className="grid grid-cols-2 gap-2 text-sm">
-            <div className="text-gray-400">价格:</div>
-            <div className={`font-mono font-bold ${
-              (hoveredStock.changePercent || 0) > 0 ? 'text-red-400' : 
-              (hoveredStock.changePercent || 0) < 0 ? 'text-green-400' : 'text-gray-400'
-            }`}>
-              ¥{hoveredStock.price?.toFixed(2)}
-            </div>
-            <div className="text-gray-400">涨跌:</div>
-            <div className={`font-mono ${
-              (hoveredStock.changePercent || 0) > 0 ? 'text-red-400' : 
-              (hoveredStock.changePercent || 0) < 0 ? 'text-green-400' : 'text-gray-400'
-            }`}>
-              {(hoveredStock.changePercent || 0) > 0 ? '+' : ''}{hoveredStock.changePercent?.toFixed(2)}%
-            </div>
-            <div className="text-gray-400">市值:</div>
-            <div className="font-mono text-gray-300">
-              {hoveredStock.totalMarket 
-                ? (hoveredStock.totalMarket / 100000000).toFixed(2) + '亿'
-                : '--'
-              }
-            </div>
-          </div>
+      {isPaused && (
+        <div className="heatmap-paused-indicator">
+          <span>已暂停</span>
         </div>
       )}
     </div>
   );
 };
 
-// 使用memo包裹组件，仅在props变化时重渲染
-export default memo(HeatMap);
+export default HeatMap;
