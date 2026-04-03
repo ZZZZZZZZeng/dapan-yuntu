@@ -141,9 +141,9 @@ const HeatMap = ({
 
     // 初始化图表 - 使用WebGL渲染器，大幅提升大量节点的渲染性能
     chartInstance.current = echarts.init(chartRef.current, 'dark', {
-      renderer: 'webgl',
+      renderer: 'canvas', // 降级为Canvas渲染，避免WebGL兼容性问题
       useDirtyRect: true, // 启用脏矩形渲染，仅重绘变化区域
-      devicePixelRatio: Math.min(window.devicePixelRatio, 2), // 限制分辨率，避免高DPI设备性能损耗
+      devicePixelRatio: Math.min(window.devicePixelRatio, 1.5), // 降低分辨率，提升性能
     });
 
     // 设置基础配置
@@ -157,14 +157,22 @@ const HeatMap = ({
         bottom: 0,
         containLabel: true,
       },
-      // 性能优化配置
-      animation: false, // 完全关闭动画，避免闪烁和性能损耗
+      // 性能优化配置：平衡流畅度和无黑屏
+      animation: false, // 全局强制关闭所有动画
       animationDuration: 0,
       animationDurationUpdate: 0,
-      progressive: 200, // 启用渐进式渲染，每批渲染200个节点，避免卡顿
-      progressiveThreshold: 1000, // 超过1000个节点时启用渐进式渲染
-      silent: true, // 静默模式，减少事件触发开销
-      useUTC: false, // 本地时区，减少时间计算开销
+      animationEasing: 'linear',
+      animationEasingUpdate: 'linear',
+      animationThreshold: 99999, // 永远不触发动画
+      progressive: 300, // 每批渲染300个节点，平衡速度和流畅度
+      progressiveThreshold: 800, // 超过800节点启用渐进式
+      progressiveChunkMode: 'sequential', // 顺序渲染，从上到下逐批显示
+      useUTC: false,
+      hoverLayerThreshold: 99999,
+      stateAnimation: { duration: 0 }, // 关闭状态动画
+      transitionDuration: 0, // 关闭所有过渡
+      blendMode: 'source-over', // 直接覆盖绘制
+      emphasis: { focus: 'none' }, // 关闭高亮动画
       tooltip: {
         trigger: 'item',
         backgroundColor: 'rgba(17, 24, 39, 0.98)',
@@ -207,6 +215,11 @@ const HeatMap = ({
           top: 'center',
           roam: false,
           nodeClick: false,
+          animation: false, // 系列级强制关闭所有动画
+          animationDuration: 0,
+          animationDurationUpdate: 0,
+          hoverAnimation: false, // 关闭悬浮动画
+          squareRatio: 1, // 固定正方形比例，避免重排
           breadcrumb: {
             show: false,
           },
@@ -321,56 +334,29 @@ const HeatMap = ({
 
   // 更新图表数据
   useEffect(() => {
-    if (!chartInstance.current) return;
+    if (!chartInstance.current || !stockData || stockData.length === 0) return;
 
     const chartData = prepareChartData();
     
     // 微任务时机更新，确保所有UI渲染完成后再更新图表
     queueMicrotask(() => {
-      // 增量更新配置，避免全量重绘导致闪烁
+      // 增量更新配置，避免全量重绘
       chartInstance.current?.setOption({
         series: [{
           data: chartData,
         }],
       }, {
         notMerge: false, // 合并配置，不替换整个图表
-        lazyUpdate: true, // 延迟更新，批量处理重绘
+        lazyUpdate: true, // 批量更新，避免阻塞主线程
         silent: true, // 静默更新，不触发额外事件
-        replaceMerge: ['series'], // 只合并更新series部分，不重建整个图表实例
       });
     });
-  }, [prepareChartData]);
+  }, [prepareChartData, stockData]);
 
   return (
-    // 固定背景色，和ECharts完全一致，任何情况都不会出现色差
-    <div className="relative w-full h-full p-1 bg-[#0a0e17]">
-      <div ref={chartRef} className="w-full h-full bg-[#0a0e17]" />
-      
-      {/* 加载状态 */}
-      {isLoading && (
-        <div className="absolute inset-0 flex items-center justify-center bg-gray-900/50">
-          <div className="flex items-center space-x-2 text-gray-400">
-            <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-            </svg>
-            <span className="text-sm">加载中...</span>
-          </div>
-        </div>
-      )}
-
-      {/* 空数据提示 */}
-      {!isLoading && stockData?.length === 0 && (
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="text-center text-gray-500">
-            <svg className="w-16 h-16 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-            </svg>
-            <p className="text-lg font-medium mb-1">暂无数据</p>
-            <p className="text-sm opacity-70">请稍候，正在加载股票数据...</p>
-          </div>
-        </div>
-      )}
+    // 强制不透明，绝对不会有半透明效果
+    <div className="relative w-full h-full p-1 bg-[#0a0e17] opacity-1" style={{ opacity: 1 }}>
+      <div ref={chartRef} className="w-full h-full bg-[#0a0e17] opacity-1" style={{ opacity: 1 }} />
 
       {/* 复盘模式覆盖层 */}
       {isReviewMode && (

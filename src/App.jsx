@@ -12,6 +12,7 @@ import { getAllStockCodes, stockList, sectors, indices, getStockSector } from '.
 function App() {
   // 数据状态
   const [stockData, setStockData] = useState([]);
+  const lastValidStockData = useRef([]); // 【关键优化】缓存上一次的有效股票数据，API异常时直接返回，绝不为空
   const [indexData, setIndexData] = useState({});
   const [lastUpdateTime, setLastUpdateTime] = useState(null);
   const [isRefreshing, setIsRefreshing] = useState(false); // 仅标记刷新状态，不清除旧数据
@@ -83,13 +84,16 @@ function App() {
         return isStock && !isIndex && !isETF;
       });
       
-      // 为每个股票添加行业信息，过滤无效数据
+      // 为每个股票添加行业信息，放宽过滤条件，避免有效股票被过滤
       const dataWithSector = onlyStocks
-        .filter(stock => stock && stock.code && stock.stockName && (stock.circulationMarket || stock.totalMarket)) // 确保是有效股票
+        .filter(stock => stock && stock.code && stock.stockName) // 只要有代码和名称就算有效股票
         .map(stock => {
           const sectorInfo = getStockSector(stock.code);
           return {
             ...stock,
+            // 如果市值为空，给一个默认值，避免被过滤
+            circulationMarket: stock.circulationMarket || stock.totalMarket || 1000000000, // 默认1亿市值
+            totalMarket: stock.totalMarket || stock.circulationMarket || 1000000000,
             sector: sectorInfo.code,
             sectorName: sectorInfo.name,
             sectorColor: sectorInfo.color,
@@ -97,9 +101,16 @@ function App() {
         });
       
       // 新数据准备完成后才替换，没有空白期
-      setStockData(dataWithSector);
-      setLastUpdateTime(new Date());
-      setMarketStats(calculateMarketStats(dataWithSector));
+      if (dataWithSector && dataWithSector.length > 0) {
+        // 新数据有效，更新缓存和状态
+        lastValidStockData.current = dataWithSector;
+        setStockData(dataWithSector);
+        setLastUpdateTime(new Date());
+        setMarketStats(calculateMarketStats(dataWithSector));
+      } else {
+        // 新数据无效，保留上一次的有效数据，不更新，完全避免黑屏
+        console.warn('新数据为空，保留上一次有效数据');
+      }
       
       // 保存复盘时间点（每个30分钟存一次）
       const now = new Date();
@@ -224,13 +235,18 @@ function App() {
     fetchAllIndexData();
   }, [fetchAllStockData, fetchAllIndexData]);
 
-  // 自动刷新
+  // 自动刷新：只创建一次定时器，避免重复创建
   useEffect(() => {
+    // 确保永远只有一个定时器在运行
+    if (refreshIntervalRef.current) {
+      clearInterval(refreshIntervalRef.current);
+    }
+    
     if (!isReviewMode) { // 复盘模式下停止自动刷新
       refreshIntervalRef.current = setInterval(() => {
         fetchAllStockData();
         fetchAllIndexData();
-      }, 8000); // 8秒刷新
+      }, 10000); // 10秒刷新
     }
 
     return () => {
@@ -238,7 +254,7 @@ function App() {
         clearInterval(refreshIntervalRef.current);
       }
     };
-  }, [fetchAllStockData, fetchAllIndexData, isReviewMode]);
+  }, [isReviewMode]); // 只依赖复盘模式，不会重复创建定时器
 
   // 复盘模式键盘导航
   useEffect(() => {
