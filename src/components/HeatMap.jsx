@@ -21,25 +21,35 @@ const HeatMap = ({ data, loading, isPaused, onStockClick, error, lastUpdateTime,
     }, 100);
   }, []);
 
-  // 预处理数据
+  // 预处理数据：按行业分组，生成嵌套treemap结构
   const processedData = useMemo(() => {
     if (!data || data.length === 0) return [];
     
-    return data.map(stock => {
-      const marketValue = stock.totalMarket ? (stock.totalMarket / 100000000).toFixed(1) + '亿' : '未知';
-      return {
+    // 按行业分组
+    const industryGroups = {};
+    data.forEach(stock => {
+      const industry = stock.sectorName || stock.industry || '其他';
+      if (!industryGroups[industry]) {
+        industryGroups[industry] = {
+          name: industry,
+          children: [],
+          value: 0 // 行业总市值
+        };
+      }
+      const marketValue = stock.circulationMarket || stock.totalMarket || 100000000;
+      industryGroups[industry].children.push({
         name: stock.stockName || stock.name,
-        value: [
-          stock.circulationMarket || stock.totalMarket || 100000000, // 面积用流通市值
-          stock.changePercent || 0, // 颜色用涨跌幅
-        ],
+        value: marketValue,
         code: stock.code,
         price: stock.price,
         change: stock.changePercent || 0,
-        industry: stock.sectorName || stock.industry,
-        marketValue: marketValue,
-      };
+        marketValue: (marketValue / 100000000).toFixed(1) + '亿'
+      });
+      industryGroups[industry].value += marketValue;
     });
+    
+    // 转换为treemap需要的数组格式
+    return Object.values(industryGroups);
   }, [data]);
 
   // 更新图表配置
@@ -50,7 +60,7 @@ const HeatMap = ({ data, loading, isPaused, onStockClick, error, lastUpdateTime,
 
     try {
       const option = {
-        backgroundColor: 'transparent',
+        backgroundColor: '#0a0e17',
         tooltip: {
           trigger: 'item',
           backgroundColor: 'rgba(17, 24, 39, 0.98)',
@@ -60,26 +70,38 @@ const HeatMap = ({ data, loading, isPaused, onStockClick, error, lastUpdateTime,
             fontSize: 12
           },
           formatter: function(params) {
-            const data = params.data;
-            const changeStr = data.change > 0 ? `+${data.change.toFixed(2)}` : data.change.toFixed(2);
-            const changeColor = data.change > 0 ? '#ff6b6b' : data.change < 0 ? '#4ecdc4' : '#fff';
-            return `
-              <div style="padding: 8px;">
-                <div style="font-weight: bold; font-size: 14px; margin-bottom: 4px;">${data.name}</div>
-                <div style="color: #aaa; font-size: 11px; margin-bottom: 4px;">${data.code}</div>
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                  <span>价格: ¥${data.price.toFixed(2)}</span>
-                  <span style="color: ${changeColor}; font-weight: bold;">${changeStr}%</span>
+            if (params.data.children) {
+              // 行业节点
+              return `
+                <div style="padding: 8px;">
+                  <div style="font-weight: bold; font-size: 14px; margin-bottom: 4px;">${params.data.name}</div>
+                  <div style="color: #aaa; font-size: 11px;">总市值: ${(params.data.value / 100000000).toFixed(1)}亿</div>
+                  <div style="color: #aaa; font-size: 11px;">股票数量: ${params.data.children.length}只</div>
                 </div>
-                <div style="margin-top: 4px; color: #888; font-size: 11px;">市值: ${data.marketValue}</div>
-              </div>
-            `;
+              `;
+            } else {
+              // 股票节点
+              const data = params.data;
+              const changeStr = data.change > 0 ? `+${data.change.toFixed(2)}` : data.change.toFixed(2);
+              const changeColor = data.change > 0 ? '#ff6b6b' : data.change < 0 ? '#4ecdc4' : '#fff';
+              return `
+                <div style="padding: 8px;">
+                  <div style="font-weight: bold; font-size: 14px; margin-bottom: 4px;">${data.name}</div>
+                  <div style="color: #aaa; font-size: 11px; margin-bottom: 4px;">${data.code}</div>
+                  <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span>价格: ¥${data.price.toFixed(2)}</span>
+                    <span style="color: ${changeColor}; font-weight: bold;">${changeStr}%</span>
+                  </div>
+                  <div style="margin-top: 4px; color: #888; font-size: 11px;">市值: ${data.marketValue}</div>
+                </div>
+              `;
+            }
           }
         },
         series: [{
           type: 'treemap',
           data: processedData,
-          leafDepth: 1,
+          leafDepth: 2, // 显示两层：行业+股票
           roam: false,
           nodeClick: false,
           breadcrumb: { show: false },
@@ -88,34 +110,66 @@ const HeatMap = ({ data, loading, isPaused, onStockClick, error, lastUpdateTime,
             color: '#fff',
             fontSize: 12,
             fontWeight: 'bold',
+            overflow: 'truncate',
           },
-          upperLabel: { show: false },
+          upperLabel: {
+            show: true,
+            height: 24,
+            color: '#fff',
+            backgroundColor: 'rgba(30, 41, 59, 0.9)', // 行业标题灰色背景，和截图一致
+            fontSize: 13,
+            fontWeight: 'bold',
+            padding: [4, 8],
+          },
           levels: [
             {
+              // 行业层级样式
               itemStyle: {
-                borderColor: '#222',
+                borderColor: '#1e293b',
+                borderWidth: 2,
+                gapWidth: 2,
+              },
+              upperLabel: {
+                show: true,
+                position: 'top',
+              }
+            },
+            {
+              // 股票层级样式
+              itemStyle: {
+                borderColor: '#1e293b',
                 borderWidth: 1,
                 gapWidth: 1,
+                color: function(params) {
+                  const change = params.data.change || 0;
+                  if (change > 0) {
+                    // 上涨：红色系，涨幅越大颜色越深
+                    const intensity = Math.min(Math.abs(change) / 10, 1);
+                    return `rgb(${Math.floor(255 - intensity * 50)}, ${Math.floor(60 - intensity * 60)}, ${Math.floor(60 - intensity * 60)})`;
+                  } else if (change < 0) {
+                    // 下跌：绿色系，跌幅越大颜色越深
+                    const intensity = Math.min(Math.abs(change) / 10, 1);
+                    return `rgb(${Math.floor(60 - intensity * 60)}, ${Math.floor(200 - intensity * 55)}, ${Math.floor(60 - intensity * 60)})`;
+                  } else {
+                    // 平盘：灰色
+                    return 'rgb(75, 85, 99)';
+                  }
+                }
               },
-            }
-          ],
-          itemStyle: {
-            borderRadius: 4,
-            borderWidth: 1,
-            borderColor: 'rgba(255, 255, 255, 0.1)',
-            color: function(params) {
-              const change = params.data.value[1] || 0;
-              if (change > 0) {
-                const intensity = Math.min(Math.abs(change) / 5, 1);
-                return `rgba(255, 107, 107, ${0.3 + intensity * 0.7})`;
-              } else if (change < 0) {
-                const intensity = Math.min(Math.abs(change) / 5, 1);
-                return `rgba(78, 205, 196, ${0.3 + intensity * 0.7})`;
-              } else {
-                return 'rgba(128, 128, 128, 0.5)';
+              label: {
+                show: true,
+                position: 'inside',
+                fontSize: 11,
+                color: '#fff',
+                formatter: function(params) {
+                  const change = params.data.change || 0;
+                  const changeStr = change > 0 ? `+${change.toFixed(1)}%` : `${change.toFixed(1)}%`;
+                  return `${params.name}\n${changeStr}`;
+                },
+                lineHeight: 14,
               }
             }
-          },
+          ],
         }]
       };
 
@@ -166,14 +220,14 @@ const HeatMap = ({ data, loading, isPaused, onStockClick, error, lastUpdateTime,
         
         // 绑定点击事件
         chartInstance.current.on('click', (params) => {
-          if (params.data && onStockClick) {
+          if (params.data && !params.data.children && onStockClick) {
             onStockClick(params.data.code);
           }
         });
         
         // 初始配置
         chartInstance.current.setOption({
-          backgroundColor: 'transparent',
+          backgroundColor: '#0a0e17',
           series: []
         }, { silent: true });
         
