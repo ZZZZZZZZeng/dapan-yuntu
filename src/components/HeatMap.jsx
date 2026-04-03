@@ -1,7 +1,5 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import * as echarts from 'echarts';
-import { calculateMarketValue } from '../api/stockApi';
-import '../styles/HeatMap.css';
 
 const HeatMap = ({ data, loading, isPaused, onStockClick, error, lastUpdateTime, selectedIndustry, selectedMarket, marketValueRange, changePercentRange }) => {
   const chartRef = useRef(null);
@@ -36,18 +34,30 @@ const HeatMap = ({ data, loading, isPaused, onStockClick, error, lastUpdateTime,
     }, 100);
   }, []);
 
+  // 市值格式化工具函数
+  const formatMarketValue = (value) => {
+    if (!value) return '0亿';
+    const num = typeof value === 'number' ? value : parseFloat(value);
+    if (num >= 100000000) {
+      return (num / 100000000).toFixed(1) + '亿';
+    } else if (num >= 10000) {
+      return (num / 10000).toFixed(1) + '万';
+    }
+    return num.toString();
+  };
+
   // 预处理数据，使用 useMemo 避免重复计算
   const processedData = useMemo(() => {
     if (!data || data.length === 0) return [];
     
     return data.map(stock => {
-      const marketValue = calculateMarketValue(stock.totalCapital, stock.price);
+      const marketValue = stock.totalMarket ? formatMarketValue(stock.totalMarket) : '未知';
       return {
-        name: stock.name,
+        name: stock.stockName || stock.name,
         code: stock.code,
         value: stock.price,
-        change: stock.changePercent,
-        industry: stock.industry,
+        change: stock.changePercent || 0,
+        industry: stock.sectorName || stock.industry,
         market: stock.market,
         marketValue: marketValue,
         itemStyle: {
@@ -206,17 +216,17 @@ const HeatMap = ({ data, loading, isPaused, onStockClick, error, lastUpdateTime,
         };
 
         // 关键优化：使用 notMerge: false 进行渐进式更新，避免 clear() 导致的闪烁
-        // 仅在第一次初始化或数据维度变化时执行 clear
-        const shouldClear = !chartInstance.current.getOption().series;
+        // 仅在第一次初始化时执行 clear，后续永远增量更新
+        const shouldClear = chartInstance.current.getOption().series.length === 0;
         
         if (shouldClear) {
           chartInstance.current.clear();
         }
         
         chartInstance.current.setOption(option, { 
-          notMerge: shouldClear,  // 渐进式更新，避免闪烁
-          lazyUpdate: false,
-          silent: false
+          notMerge: false,  // 永远渐进式更新，避免闪烁
+          lazyUpdate: true, // 延迟更新，批量处理
+          silent: true      // 静默更新，不触发事件
         });
         
         // 标记图表已准备好
@@ -321,36 +331,71 @@ const HeatMap = ({ data, loading, isPaused, onStockClick, error, lastUpdateTime,
   // 渲染 - 优化：避免不必要的 loading 状态，优先展示图表
   if (error) {
     return (
-      <div className="heatmap-container">
-        <div className="heatmap-error">
+      <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0a0e17', color: '#fff' }}>
+        <div>
           <p>加载失败: {error}</p>
-          <button onClick={() => window.location.reload()}>重试</button>
+          <button onClick={() => window.location.reload()} style={{ marginTop: '12px', padding: '8px 16px', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>重试</button>
         </div>
       </div>
     );
   }
 
   // 关键优化：即使 loading 也为 true，也渲染图表容器，避免黑屏
-  // 使用 CSS 控制 loading 层的显示，而不是完全隐藏容器
+  // 使用半透明覆盖层替代visibility切换，完全消除闪烁
   return (
-    <div className="heatmap-wrapper">
+    <div style={{ width: '100%', height: '100%', position: 'relative', background: '#0a0e17' }}>
       <div 
         ref={chartRef} 
-        className="heatmap-container"
         style={{ 
           width: '100%', 
           height: '100%',
-          visibility: loading ? 'hidden' : 'visible' // 隐藏但占位，避免布局抖动
+          opacity: (loading || !isChartReady) ? 0.3 : 1, // 半透明而不是隐藏，避免闪烁
+          transition: 'opacity 0.2s ease' // 平滑过渡
         }}
       />
       {(loading || !isChartReady) && (
-        <div className="heatmap-loading-overlay">
-          <div className="loading-spinner"></div>
-          <p>正在加载...</p>
+        <div style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(10, 14, 23, 0.7)',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 10
+        }}>
+          <div style={{
+            width: '40px',
+            height: '40px',
+            border: '3px solid rgba(255,255,255,0.1)',
+            borderTop: '3px solid #3b82f6',
+            borderRadius: '50%',
+            animation: 'spin 1s linear infinite'
+          }} />
+          <p style={{ color: '#94a3b8', marginTop: '12px', fontSize: '14px' }}>正在加载...</p>
+          <style>{`
+            @keyframes spin {
+              from { transform: rotate(0deg); }
+              to { transform: rotate(360deg); }
+            }
+          `}</style>
         </div>
       )}
       {isPaused && (
-        <div className="heatmap-paused-indicator">
+        <div style={{
+          position: 'absolute',
+          top: '20px',
+          right: '20px',
+          background: 'rgba(0,0,0,0.6)',
+          padding: '6px 12px',
+          borderRadius: '4px',
+          color: '#fbbf24',
+          fontSize: '12px',
+          zIndex: 20
+        }}>
           <span>已暂停</span>
         </div>
       )}

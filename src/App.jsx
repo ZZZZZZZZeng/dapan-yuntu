@@ -366,13 +366,20 @@ function App() {
         {/* 热力图主区域，固定背景色和图表一致，避免更新时闪烁黑屏 */}
         <div id="heatmap-container" className="flex-1 relative bg-[#0a0e17] overflow-hidden">
           <HeatMap
-            stockData={filteredData}
-            selectedSectors={selectedSectors}
-            selectedIndex={selectedIndex}
-            filterRange={filterRange}
-            onStockClick={(stock) => console.log('点击股票:', stock)}
-            onDrillDown={handleStockDoubleClick}
-            isReviewMode={isReviewMode}
+            data={filteredData}
+            loading={isRefreshing}
+            isPaused={isReviewMode}
+            changePercentRange={filterRange}
+            onStockClick={(stockCode) => {
+              const stock = stockData.find(s => s.code === stockCode);
+              if (stock) {
+                setSelectedStock(stock);
+                setShowKlineModal(true);
+              }
+            }}
+            lastUpdateTime={lastUpdateTime}
+            selectedIndustry={selectedSectors}
+            selectedMarket={selectedMarket}
           />
         </div>
       </div>
