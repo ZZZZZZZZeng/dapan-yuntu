@@ -264,7 +264,7 @@ const HeatMap = ({ data, loading, isPaused, onStockClick, error, lastUpdateTime,
       debounceTimer.current = setTimeout(() => {
         console.log('[HeatMap] 防抖到期，执行updateChart');
         updateChart();
-      }, 50); // 50ms 防抖延迟
+      }, 100); // 100ms 防抖延迟，避免频繁重绘
     } else if (chartData.length === 0) {
       console.warn('[HeatMap] 图表数据为空，跳过更新');
     }

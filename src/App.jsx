@@ -229,11 +229,11 @@ function App() {
     }
   }, []);
 
-  // 初始化数据
+  // 初始化数据 - 只执行一次
   useEffect(() => {
     fetchAllStockData();
     fetchAllIndexData();
-  }, [fetchAllStockData, fetchAllIndexData]);
+  }, []);
 
   // 自动刷新：只创建一次定时器，避免重复创建
   useEffect(() => {
@@ -246,7 +246,7 @@ function App() {
       refreshIntervalRef.current = setInterval(() => {
         fetchAllStockData();
         fetchAllIndexData();
-      }, 10000); // 10秒刷新
+      }, 30000); // 30秒刷新，降低频率避免闪烁
     }
 
     return () => {
