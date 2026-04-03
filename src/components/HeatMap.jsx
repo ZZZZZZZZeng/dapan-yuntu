@@ -21,35 +21,28 @@ const HeatMap = ({ data, loading, isPaused, onStockClick, error, lastUpdateTime,
     }, 100);
   }, []);
 
-  // 预处理数据：按行业分组，生成嵌套treemap结构
+  // 预处理数据
   const processedData = useMemo(() => {
     if (!data || data.length === 0) return [];
     
-    // 按行业分组
-    const industryGroups = {};
-    data.forEach(stock => {
-      const industry = stock.sectorName || stock.industry || '其他';
-      if (!industryGroups[industry]) {
-        industryGroups[industry] = {
-          name: industry,
-          children: [],
-          value: 0 // 行业总市值
-        };
-      }
-      const marketValue = stock.circulationMarket || stock.totalMarket || 100000000;
-      industryGroups[industry].children.push({
-        name: stock.stockName || stock.name,
-        value: marketValue,
+    return data.map(stock => {
+      // 容错：兼容不同字段名
+      const changePercent = stock.changePercent || stock.change || stock.zdf || 0;
+      const marketValue = stock.circulationMarket || stock.totalMarket || stock.市值 || 100000000;
+      const stockName = stock.stockName || stock.name || stock.name || '未知';
+      
+      return {
+        name: stockName,
+        value: [
+          marketValue, // 面积用流通市值
+          changePercent, // 颜色用涨跌幅
+        ],
         code: stock.code,
-        price: stock.price,
-        change: stock.changePercent || 0,
+        price: stock.price || 0,
+        change: changePercent,
         marketValue: (marketValue / 100000000).toFixed(1) + '亿'
-      });
-      industryGroups[industry].value += marketValue;
-    });
-    
-    // 转换为treemap需要的数组格式
-    return Object.values(industryGroups);
+      };
+    }).filter(item => item.change !== 0 || item.value > 0); // 过滤无效数据
   }, [data]);
 
   // 更新图表配置
@@ -70,113 +63,68 @@ const HeatMap = ({ data, loading, isPaused, onStockClick, error, lastUpdateTime,
             fontSize: 12
           },
           formatter: function(params) {
-            if (params.data.children) {
-              // 行业节点
-              return `
-                <div style="padding: 8px;">
-                  <div style="font-weight: bold; font-size: 14px; margin-bottom: 4px;">${params.data.name}</div>
-                  <div style="color: #aaa; font-size: 11px;">总市值: ${(params.data.value / 100000000).toFixed(1)}亿</div>
-                  <div style="color: #aaa; font-size: 11px;">股票数量: ${params.data.children.length}只</div>
+            const data = params.data;
+            const changeStr = data.change > 0 ? `+${data.change.toFixed(2)}` : data.change.toFixed(2);
+            const changeColor = data.change > 0 ? '#ff6b6b' : data.change < 0 ? '#4ecdc4' : '#fff';
+            return `
+              <div style="padding: 8px;">
+                <div style="font-weight: bold; font-size: 14px; margin-bottom: 4px;">${data.name}</div>
+                <div style="color: #aaa; font-size: 11px; margin-bottom: 4px;">${data.code}</div>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <span>价格: ¥${data.price.toFixed(2)}</span>
+                  <span style="color: ${changeColor}; font-weight: bold;">${changeStr}%</span>
                 </div>
-              `;
-            } else {
-              // 股票节点
-              const data = params.data;
-              const changeStr = data.change > 0 ? `+${data.change.toFixed(2)}` : data.change.toFixed(2);
-              const changeColor = data.change > 0 ? '#ff6b6b' : data.change < 0 ? '#4ecdc4' : '#fff';
-              return `
-                <div style="padding: 8px;">
-                  <div style="font-weight: bold; font-size: 14px; margin-bottom: 4px;">${data.name}</div>
-                  <div style="color: #aaa; font-size: 11px; margin-bottom: 4px;">${data.code}</div>
-                  <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <span>价格: ¥${data.price.toFixed(2)}</span>
-                    <span style="color: ${changeColor}; font-weight: bold;">${changeStr}%</span>
-                  </div>
-                  <div style="margin-top: 4px; color: #888; font-size: 11px;">市值: ${data.marketValue}</div>
-                </div>
-              `;
-            }
+                <div style="margin-top: 4px; color: #888; font-size: 11px;">市值: ${data.marketValue}</div>
+              </div>
+            `;
           }
         },
         series: [{
           type: 'treemap',
           data: processedData,
-          leafDepth: 2, // 显示两层：行业+股票
+          leafDepth: 1,
           roam: false,
           nodeClick: false,
           breadcrumb: { show: false },
           label: {
             show: true,
             color: '#fff',
-            fontSize: 12,
+            fontSize: 11,
             fontWeight: 'bold',
-            overflow: 'truncate',
-          },
-          upperLabel: {
-            show: true,
-            height: 24,
-            color: '#fff',
-            backgroundColor: 'rgba(30, 41, 59, 0.9)', // 行业标题灰色背景，和截图一致
-            fontSize: 13,
-            fontWeight: 'bold',
-            padding: [4, 8],
-          },
-          levels: [
-            {
-              // 行业层级样式
-              itemStyle: {
-                borderColor: '#1e293b',
-                borderWidth: 2,
-                gapWidth: 2,
-              },
-              upperLabel: {
-                show: true,
-                position: 'top',
-              }
+            formatter: function(params) {
+              const change = params.data.change || 0;
+              const changeStr = change > 0 ? `+${change.toFixed(1)}%` : `${change.toFixed(1)}%`;
+              return `${params.name}\n${changeStr}`;
             },
-            {
-              // 股票层级样式
-              itemStyle: {
-                borderColor: '#1e293b',
-                borderWidth: 1,
-                gapWidth: 1,
-                color: function(params) {
-                  const change = params.data.change || 0;
-                  if (change > 0) {
-                    // 上涨：红色系，涨幅越大颜色越深
-                    const intensity = Math.min(Math.abs(change) / 10, 1);
-                    return `rgb(${Math.floor(255 - intensity * 50)}, ${Math.floor(60 - intensity * 60)}, ${Math.floor(60 - intensity * 60)})`;
-                  } else if (change < 0) {
-                    // 下跌：绿色系，跌幅越大颜色越深
-                    const intensity = Math.min(Math.abs(change) / 10, 1);
-                    return `rgb(${Math.floor(60 - intensity * 60)}, ${Math.floor(200 - intensity * 55)}, ${Math.floor(60 - intensity * 60)})`;
-                  } else {
-                    // 平盘：灰色
-                    return 'rgb(75, 85, 99)';
-                  }
-                }
-              },
-              label: {
-                show: true,
-                position: 'inside',
-                fontSize: 11,
-                color: '#fff',
-                formatter: function(params) {
-                  const change = params.data.change || 0;
-                  const changeStr = change > 0 ? `+${change.toFixed(1)}%` : `${change.toFixed(1)}%`;
-                  return `${params.name}\n${changeStr}`;
-                },
-                lineHeight: 14,
+            lineHeight: 14,
+          },
+          upperLabel: { show: false },
+          itemStyle: {
+            borderRadius: 0,
+            borderWidth: 1,
+            borderColor: '#1e293b',
+            gapWidth: 1,
+            color: function(params) {
+              const change = params.data.change || 0;
+              // 严格按照截图配色：涨红跌绿
+              if (change > 0.01) { // 上涨：红色系，涨幅越大越红
+                const intensity = Math.min(Math.abs(change) / 10, 1);
+                return `rgb(${255 - Math.floor(intensity * 30)}, ${Math.max(50, 80 - Math.floor(intensity * 80))}, ${Math.max(50, 80 - Math.floor(intensity * 80))})`;
+              } else if (change < -0.01) { // 下跌：绿色系，跌幅越大越绿
+                const intensity = Math.min(Math.abs(change) / 10, 1);
+                return `rgb(${Math.max(50, 80 - Math.floor(intensity * 80))}, ${255 - Math.floor(intensity * 30)}, ${Math.max(50, 80 - Math.floor(intensity * 80))})`;
+              } else { // 平盘：灰色
+                return 'rgb(75, 85, 99)';
               }
             }
-          ],
+          },
         }]
       };
 
-      // 增量更新，避免闪烁
+      // 强制全量更新，避免旧缓存
       chartInstance.current.setOption(option, { 
-        notMerge: false,
-        lazyUpdate: true,
+        notMerge: true,
+        lazyUpdate: false,
         silent: false
       });
       
@@ -184,7 +132,7 @@ const HeatMap = ({ data, loading, isPaused, onStockClick, error, lastUpdateTime,
       setIsChartReady(true);
       
     } catch (err) {
-      console.error('Chart update error:', err);
+      console.error('Chart update error:', err, processedData.slice(0, 5)); // 打印前5条数据排查
     } finally {
       isUpdating.current = false;
     }
@@ -198,7 +146,7 @@ const HeatMap = ({ data, loading, isPaused, onStockClick, error, lastUpdateTime,
       }
       debounceTimer.current = setTimeout(() => {
         updateChart();
-      }, 100);
+      }, 50);
     }
     
     return () => {
@@ -214,13 +162,13 @@ const HeatMap = ({ data, loading, isPaused, onStockClick, error, lastUpdateTime,
       try {
         chartInstance.current = echarts.init(chartRef.current, 'dark', {
           renderer: 'canvas',
-          useDirtyRect: true,
+          useDirtyRect: false,
           devicePixelRatio: Math.min(window.devicePixelRatio, 1.5),
         });
         
         // 绑定点击事件
         chartInstance.current.on('click', (params) => {
-          if (params.data && !params.data.children && onStockClick) {
+          if (params.data && onStockClick) {
             onStockClick(params.data.code);
           }
         });
